@@ -24,7 +24,7 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
 
   function tooltip(summary: SlotSummary) {
     return (
-      <div className="pointer-events-none absolute left-1/2 top-0 z-50 w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl">
+      <div className="pointer-events-none absolute left-1/2 top-0 z-50 hidden w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
           {formatDateLabel(summary.date)} at {formatTimeLabel(summary.time)}
         </p>
@@ -72,7 +72,7 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
                 const label = formatDateHeader(date);
 
                 return (
-                  <div className="mb-1 flex flex-col items-center gap-1 text-center" key={date}>
+                  <div className="pointer-events-none mb-1 flex flex-col items-center gap-1 text-center" key={date}>
                     <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
                     <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
                   </div>

@@ -50,7 +50,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative">
+          <div className="relative lg:pt-8 xl:pt-10">
             <div className="absolute inset-x-8 top-6 h-64 rounded-full bg-primary/15 blur-3xl" />
             <div className="panel-border panel-shadow relative overflow-hidden rounded-[30px] bg-white p-6 sm:p-8">
               <div className="mb-8 flex items-center justify-between">

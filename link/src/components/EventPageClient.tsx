@@ -6,7 +6,7 @@ import {CalendarRange, Clock3, MapPin, Users} from 'lucide-react';
 
 import AvailabilityGrid from '@/components/AvailabilityGrid';
 import type {ApiErrorResponse, EventRecord, SubmitAvailabilityRequest, SubmitAvailabilityResponse} from '@/lib/types';
-import {formatDateRange, formatTimeLabel, getExistingAvailability, sortAvailability} from '@/lib/utils';
+import {formatDateRange, formatTimeLabel, getExistingAvailability, getExistingAvailabilityByResponseId, sortAvailability} from '@/lib/utils';
 
 interface EventPageClientProps {
   initialEvent: EventRecord;
@@ -14,18 +14,39 @@ interface EventPageClientProps {
 
 const PARTICIPANT_STORAGE_PREFIX = 'link:participant:';
 const SUBMITTED_STORAGE_PREFIX = 'link:submitted:';
+const RESPONSE_STORAGE_PREFIX = 'link:response:';
 
 export default function EventPageClient({initialEvent}: EventPageClientProps) {
   const router = useRouter();
   const [participantName, setParticipantName] = useState('');
+  const [responseId, setResponseId] = useState('');
 
   const participantStorageKey = `${PARTICIPANT_STORAGE_PREFIX}${initialEvent.id}`;
   const submissionStorageKey = `${SUBMITTED_STORAGE_PREFIX}${initialEvent.id}`;
-  const initialAvailability = participantName ? getExistingAvailability(initialEvent, participantName) : [];
+  const responseStorageKey = `${RESPONSE_STORAGE_PREFIX}${initialEvent.id}`;
+  const initialAvailability = responseId
+    ? getExistingAvailabilityByResponseId(initialEvent, responseId)
+    : participantName
+      ? getExistingAvailability(initialEvent, participantName)
+      : [];
 
   useEffect(() => {
     try {
       const savedName = window.localStorage.getItem(participantStorageKey)?.trim() ?? '';
+      const savedResponseId = window.localStorage.getItem(responseStorageKey)?.trim() ?? '';
+      const matchedResponse = savedResponseId
+        ? initialEvent.responses.find((response) => response.id === savedResponseId)
+        : null;
+
+      if (matchedResponse) {
+        setResponseId(matchedResponse.id);
+        setParticipantName(matchedResponse.participantName);
+        return;
+      }
+
+      if (savedResponseId) {
+        setResponseId(savedResponseId);
+      }
 
       if (savedName) {
         setParticipantName(savedName);
@@ -33,7 +54,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
     } catch {
       // Ignore storage access issues and continue without a saved name.
     }
-  }, [participantStorageKey]);
+  }, [initialEvent.responses, participantStorageKey, responseStorageKey]);
 
   function handleSaveName(name: string) {
     setParticipantName(name);
@@ -50,6 +71,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
       eventId: initialEvent.id,
       participantName,
       availability: sortAvailability(availability),
+      responseId: responseId || undefined,
     };
 
     try {
@@ -77,11 +99,15 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
       const result = (await response.json()) as SubmitAvailabilityResponse;
 
       try {
+        window.localStorage.setItem(participantStorageKey, result.participantName);
         window.localStorage.setItem(submissionStorageKey, result.participantName);
+        window.localStorage.setItem(responseStorageKey, result.id);
       } catch {
         // Ignore storage access issues after saving the response.
       }
 
+      setResponseId(result.id);
+      setParticipantName(result.participantName);
       router.push(`/event/${initialEvent.id}/group`);
       return {ok: true};
     } catch {

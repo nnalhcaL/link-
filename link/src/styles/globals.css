@@ -65,7 +65,8 @@ textarea {
 
 .grid-scroll {
   overscroll-behavior-x: contain;
-  touch-action: pan-x pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+  touch-action: auto;
 }
 
 .grid-scroll::-webkit-scrollbar-thumb {
@@ -87,6 +88,7 @@ textarea {
   z-index: 5;
   background: var(--page-surface);
   box-shadow: 14px 0 18px -20px rgba(34, 41, 53, 0.4);
+  pointer-events: none;
 }
 
 .sticky-time-cell--corner {

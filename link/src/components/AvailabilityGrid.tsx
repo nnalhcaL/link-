@@ -318,7 +318,7 @@ export default function AvailabilityGrid({
                     const label = formatDateHeader(date);
 
                     return (
-                      <div className="mb-1 flex flex-col items-center gap-1 text-center" key={date}>
+                      <div className="pointer-events-none mb-1 flex flex-col items-center gap-1 text-center" key={date}>
                         <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
                         <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
                       </div>

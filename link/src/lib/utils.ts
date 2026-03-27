@@ -272,6 +272,10 @@ export function getExistingAvailability(event: EventRecord, participantName: str
   return event.responses.find((response) => response.participantName === participantName)?.availability ?? [];
 }
 
+export function getExistingAvailabilityByResponseId(event: EventRecord, responseId: string) {
+  return event.responses.find((response) => response.id === responseId)?.availability ?? [];
+}
+
 export function buildCalendarMonth(date: Date) {
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth();

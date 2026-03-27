@@ -47,6 +47,7 @@ export interface SubmitAvailabilityRequest {
   eventId: string;
   participantName: string;
   availability: string[];
+  responseId?: string;
 }
 
 export interface SubmitAvailabilityResponse {
@@ -83,4 +84,3 @@ export interface SlotSummary {
   ratio: number;
   participantNames: string[];
 }
-

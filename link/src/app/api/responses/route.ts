@@ -1,4 +1,5 @@
 import {NextRequest, NextResponse} from 'next/server';
+import {Prisma} from '@prisma/client';
 
 import {prisma} from '@/lib/prisma';
 import type {ApiErrorResponse, ApiFieldErrors, SubmitAvailabilityRequest, SubmitAvailabilityResponse} from '@/lib/types';
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
   const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
   const participantName = typeof body.participantName === 'string' ? body.participantName.trim() : '';
   const availability = Array.isArray(body.availability) ? sortAvailability(body.availability) : [];
+  const responseId = typeof body.responseId === 'string' ? body.responseId.trim() : '';
   const fieldErrors: ApiFieldErrors = {};
 
   if (!eventId) {
@@ -52,25 +54,71 @@ export async function POST(request: NextRequest) {
     return errorResponse('Please correct the highlighted fields.', fieldErrors);
   }
 
-  const response = await prisma.response.upsert({
-    where: {
-      eventId_participantName: {
-        eventId,
-        participantName,
-      },
-    },
-    update: {
-      availability: JSON.stringify(availability),
-    },
-    create: {
-      eventId,
-      participantName,
-      availability: JSON.stringify(availability),
-    },
-  });
+  try {
+    const response = responseId
+      ? await prisma.response.findFirst({
+          where: {
+            id: responseId,
+            eventId,
+          },
+        }).then(async (existingResponse) => {
+          if (existingResponse) {
+            return prisma.response.update({
+              where: {
+                id: existingResponse.id,
+              },
+              data: {
+                participantName,
+                availability: JSON.stringify(availability),
+              },
+            });
+          }
 
-  return NextResponse.json<SubmitAvailabilityResponse>({
-    id: response.id,
-    participantName: response.participantName,
-  });
+          return prisma.response.upsert({
+            where: {
+              eventId_participantName: {
+                eventId,
+                participantName,
+              },
+            },
+            update: {
+              availability: JSON.stringify(availability),
+            },
+            create: {
+              eventId,
+              participantName,
+              availability: JSON.stringify(availability),
+            },
+          });
+        })
+      : await prisma.response.upsert({
+          where: {
+            eventId_participantName: {
+              eventId,
+              participantName,
+            },
+          },
+          update: {
+            availability: JSON.stringify(availability),
+          },
+          create: {
+            eventId,
+            participantName,
+            availability: JSON.stringify(availability),
+          },
+        });
+
+    return NextResponse.json<SubmitAvailabilityResponse>({
+      id: response.id,
+      participantName: response.participantName,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return errorResponse('Please correct the highlighted fields.', {
+        participantName: 'That name is already being used for this event.',
+      });
+    }
+
+    return errorResponse('We could not save your availability right now.', undefined, 500);
+  }
 }
