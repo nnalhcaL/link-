@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Event {
+  id             String     @id @default(cuid())
+  title          String
+  description    String?
+  dates          String
+  timeRangeStart String
+  timeRangeEnd   String
+  timezone       String     @default("America/New_York")
+  location       String?
+  createdAt      DateTime   @default(now())
+  responses      Response[]
+}
+
+model Response {
+  id              String   @id @default(cuid())
+  participantName String
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  availability    String
+  createdAt       DateTime @default(now())
+
+  @@unique([eventId, participantName])
+}

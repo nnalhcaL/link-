@@ -1,0 +1,148 @@
+'use client';
+
+import {useState} from 'react';
+import {Settings, Sparkles} from 'lucide-react';
+
+import type {EventRecord, SlotSummary} from '@/lib/types';
+import {buildSlotSummaries, formatDateHeader, formatDateLabel, formatTimeLabel, generateTimeRows, getHeatmapColor} from '@/lib/utils';
+
+interface GroupHeatmapProps {
+  event: EventRecord;
+}
+
+export default function GroupHeatmap({event}: GroupHeatmapProps) {
+  const [hoveredSlotKey, setHoveredSlotKey] = useState<string | null>(null);
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
+
+  const summaries = buildSlotSummaries(event);
+  const summaryMap = new Map(summaries.map((summary) => [summary.slotKey, summary]));
+  const activeSummary =
+    summaryMap.get(hoveredSlotKey ?? '') ?? summaryMap.get(selectedSlotKey ?? '') ?? summaries.find((summary) => summary.count > 0) ?? null;
+  const timeRows = generateTimeRows(event.timeRangeStart, event.timeRangeEnd);
+  const totalParticipants = event.responses.length;
+
+  function tooltip(summary: SlotSummary) {
+    return (
+      <div className="pointer-events-none absolute left-1/2 top-0 z-20 w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+          {formatDateLabel(summary.date)} at {formatTimeLabel(summary.time)}
+        </p>
+        <p className="mt-2 text-sm font-semibold">
+          {summary.count} of {Math.max(totalParticipants, 1)} available
+        </p>
+        <p className="mt-2 text-sm text-white/75">
+          {summary.participantNames.length > 0 ? summary.participantNames.join(', ') : 'Nobody has marked this slot yet.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="panel-border rounded-[28px] bg-white p-6 shadow-soft">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+              <Settings className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-headline text-xl font-bold tracking-tight text-ink">Group availability</h2>
+              <p className="text-sm text-ink-soft">Hover any slot to see the overlap and who can make it.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-full bg-surface-soft px-4 py-2 text-xs font-semibold text-ink-soft">
+            <span>Low</span>
+            <span className="h-3 w-3 rounded-sm bg-[#ebe4ff]" />
+            <span className="h-3 w-3 rounded-sm bg-[#a38be4]" />
+            <span className="h-3 w-3 rounded-sm bg-primary" />
+            <span>All available</span>
+          </div>
+        </div>
+
+        <div className="grid-scroll overflow-x-auto">
+          <div className="min-w-[780px]">
+            <div className="grid grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] gap-2" style={{'--date-count': event.dates.length} as React.CSSProperties}>
+              <div className="h-14" />
+              {event.dates.map((date) => {
+                const label = formatDateHeader(date);
+
+                return (
+                  <div className="mb-1 flex flex-col items-center gap-1 text-center" key={date}>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
+                    <span className="font-headline text-xl font-bold tracking-tight text-ink">{label.day}</span>
+                  </div>
+                );
+              })}
+
+              {timeRows.map((time) => (
+                <>
+                  <div className="flex h-12 items-center justify-end pr-4 text-xs font-medium text-ink-soft" key={`${time}-label`}>
+                    {formatTimeLabel(time)}
+                  </div>
+                  {event.dates.map((date) => {
+                    const slotKey = `${date}T${time}`;
+                    const summary = summaryMap.get(slotKey);
+
+                    if (!summary) {
+                      return (
+                        <div
+                          className="h-12 rounded-2xl border border-white bg-surface-soft"
+                          key={slotKey}
+                        />
+                      );
+                    }
+
+                    const isHovered = hoveredSlotKey === slotKey;
+                    const isSelected = selectedSlotKey === slotKey;
+
+                    return (
+                      <button
+                        className="relative flex h-12 items-center justify-center rounded-2xl border border-white text-xs font-semibold text-white transition-transform duration-150 hover:scale-[1.03]"
+                        key={slotKey}
+                        onBlur={() => setHoveredSlotKey(null)}
+                        onClick={() => setSelectedSlotKey(slotKey)}
+                        onFocus={() => setHoveredSlotKey(slotKey)}
+                        onMouseEnter={() => setHoveredSlotKey(slotKey)}
+                        onMouseLeave={() => setHoveredSlotKey(null)}
+                        style={{
+                          backgroundColor: getHeatmapColor(summary.count, totalParticipants),
+                          boxShadow: isSelected ? 'inset 0 0 0 2px rgba(255,255,255,0.65)' : undefined,
+                        }}
+                        type="button"
+                      >
+                        {summary.ratio === 1 && totalParticipants > 0 ? <Sparkles className="h-4 w-4" /> : summary.count || ''}
+                        {isHovered ? tooltip(summary) : null}
+                      </button>
+                    );
+                  })}
+                </>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel-border rounded-[28px] bg-white p-5 shadow-soft">
+        {activeSummary ? (
+          <>
+            <p className="text-sm font-semibold text-primary">
+              {formatDateLabel(activeSummary.date)} at {formatTimeLabel(activeSummary.time)}
+            </p>
+            <p className="mt-2 text-lg font-semibold text-ink">
+              {activeSummary.count} of {Math.max(totalParticipants, 1)} people can make this slot.
+            </p>
+            <p className="mt-3 text-sm leading-6 text-ink-soft">
+              {activeSummary.participantNames.length > 0
+                ? activeSummary.participantNames.join(', ')
+                : 'No one has selected this slot yet.'}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-ink-soft">Once responses arrive, the strongest overlap will show up here.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
