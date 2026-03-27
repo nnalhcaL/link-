@@ -32,8 +32,11 @@ export default function AvailabilityGrid({
   const [nameError, setNameError] = useState<string | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const lastPaintedSlotRef = useRef<string | null>(null);
   const timeRows = generateTimeRows(event.timeRangeStart, event.timeRangeEnd);
   const initialSignature = initialAvailability.join('|');
+  const gridMinWidth = Math.max(320, 72 + event.dates.length * 92);
 
   useEffect(() => {
     setSelectedSlots(new Set(initialAvailability));
@@ -48,14 +51,18 @@ export default function AvailabilityGrid({
   }, [participantName]);
 
   useEffect(() => {
-    function finishDrag() {
+    function resetDragState() {
       setIsDragging(false);
+      activePointerIdRef.current = null;
+      lastPaintedSlotRef.current = null;
     }
 
-    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointerup', resetDragState);
+    window.addEventListener('pointercancel', resetDragState);
 
     return () => {
-      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointerup', resetDragState);
+      window.removeEventListener('pointercancel', resetDragState);
     };
   }, []);
 
@@ -67,7 +74,12 @@ export default function AvailabilityGrid({
     nameInputRef.current?.focus();
   }, [isEditingName]);
 
-  function applyDrag(slotKey: string, mode: 'select' | 'deselect') {
+  function paintSlot(slotKey: string, mode: 'select' | 'deselect', force = false) {
+    if (!force && lastPaintedSlotRef.current === slotKey) {
+      return;
+    }
+
+    lastPaintedSlotRef.current = slotKey;
     setSelectedSlots((current) => {
       const next = new Set(current);
 
@@ -79,6 +91,16 @@ export default function AvailabilityGrid({
 
       return next;
     });
+  }
+
+  function finishDrag(pointerId?: number, element?: HTMLButtonElement | null) {
+    if (typeof pointerId === 'number' && element?.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+
+    setIsDragging(false);
+    activePointerIdRef.current = null;
+    lastPaintedSlotRef.current = null;
   }
 
   function openNameEditor() {
@@ -118,17 +140,34 @@ export default function AvailabilityGrid({
     const mode = selectedSlots.has(slotKey) ? 'deselect' : 'select';
     setDragMode(mode);
     setIsDragging(true);
+    activePointerIdRef.current = eventPointer.pointerId;
+    lastPaintedSlotRef.current = null;
     setErrorMessage(null);
     setStatusMessage(null);
-    applyDrag(slotKey, mode);
+    eventPointer.currentTarget.setPointerCapture(eventPointer.pointerId);
+    paintSlot(slotKey, mode, true);
   }
 
-  function handlePointerEnter(slotKey: string) {
-    if (!isDragging) {
+  function handlePointerMove(eventPointer: ReactPointerEvent<HTMLButtonElement>) {
+    if (!isDragging || activePointerIdRef.current !== eventPointer.pointerId) {
       return;
     }
 
-    applyDrag(slotKey, dragMode);
+    eventPointer.preventDefault();
+    const pointedElement = document.elementFromPoint(eventPointer.clientX, eventPointer.clientY);
+
+    if (!(pointedElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const slotButton = pointedElement.closest<HTMLElement>('[data-slot-key]');
+    const slotKey = slotButton?.dataset.slotKey;
+
+    if (!slotKey) {
+      return;
+    }
+
+    paintSlot(slotKey, dragMode);
   }
 
   async function handleSubmit() {
@@ -151,8 +190,8 @@ export default function AvailabilityGrid({
   }
 
   return (
-    <section className="space-y-6">
-      <div className="panel-border rounded-[28px] bg-white p-5 shadow-soft">
+    <section className="space-y-4 sm:space-y-6">
+      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
         {isEditingName ? (
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-xl">
@@ -169,7 +208,7 @@ export default function AvailabilityGrid({
 
             <div className="w-full lg:max-w-[520px]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[24px] bg-surface-soft px-5 py-4">
+                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] bg-surface-soft px-4 py-3.5 sm:rounded-[24px] sm:px-5 sm:py-4">
                   <input
                     ref={nameInputRef}
                     className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-soft/75"
@@ -182,7 +221,7 @@ export default function AvailabilityGrid({
                 </div>
 
                 <button
-                  className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d]"
+                  className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] sm:w-auto"
                   onClick={saveName}
                   type="button"
                 >
@@ -217,35 +256,38 @@ export default function AvailabilityGrid({
         )}
       </div>
 
-      <div className="panel-border rounded-[28px] bg-white p-5 shadow-soft">
+      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-5 text-sm text-ink-soft">
-            <div className="flex items-center gap-2">
-              <span className="h-3.5 w-3.5 rounded-sm bg-primary" />
-              Selected
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-ink-soft sm:gap-5">
+              <div className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 rounded-sm bg-primary" />
+                Selected
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 rounded-sm bg-surface-strong" />
+                Unselected
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-primary" />
+                {event.timezone}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3.5 w-3.5 rounded-sm bg-surface-strong" />
-              Unselected
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-primary" />
-              {event.timezone}
-            </div>
+            <p className="text-sm text-ink-soft">Tap once or drag across the grid to paint your availability.</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button
-              className="rounded-full border border-line bg-surface-soft px-4 py-2 text-sm font-medium text-ink-soft transition-all duration-150 hover:border-primary/20 hover:text-ink"
+              className="w-full rounded-xl border border-line bg-surface-soft px-4 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:border-primary/20 hover:text-ink sm:w-auto"
               type="button"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 <RefreshCw className="h-4 w-4" />
                 Calendar sync coming soon
               </span>
             </button>
             <button
-              className="rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-all duration-150 hover:bg-surface-soft hover:text-ink"
+              className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:bg-surface-soft hover:text-ink sm:w-auto"
               onClick={() => setSelectedSlots(new Set())}
               type="button"
             >
@@ -255,7 +297,7 @@ export default function AvailabilityGrid({
         </div>
       </div>
 
-      <div className="panel-border rounded-[32px] bg-white p-4 shadow-soft sm:p-6">
+      <div className="panel-border rounded-[24px] bg-white p-3 shadow-soft sm:rounded-[32px] sm:p-6">
         <div className="relative">
           <div
             className={cn(
@@ -263,17 +305,20 @@ export default function AvailabilityGrid({
               participantName ? '' : 'pointer-events-none opacity-45',
             )}
           >
-            <div className="grid-scroll overflow-x-auto">
-              <div className="slot-grid min-w-[780px]">
-                <div className="grid grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] gap-2" style={{'--date-count': event.dates.length} as React.CSSProperties}>
-                  <div className="h-14" />
+            <div className="grid-scroll overflow-x-auto pb-1">
+              <div className="slot-grid pr-2 sm:pr-4" style={{minWidth: `${gridMinWidth}px`}}>
+                <div
+                  className="grid grid-cols-[72px_repeat(var(--date-count),minmax(92px,1fr))] gap-1.5 sm:grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
+                  style={{'--date-count': event.dates.length} as React.CSSProperties}
+                >
+                  <div className="sticky-time-cell sticky-time-cell--corner h-12 sm:h-14" />
                   {event.dates.map((date) => {
                     const label = formatDateHeader(date);
 
                     return (
                       <div className="mb-1 flex flex-col items-center gap-1 text-center" key={date}>
                         <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
-                        <span className="font-headline text-xl font-bold tracking-tight text-ink">{label.day}</span>
+                        <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
                       </div>
                     );
                   })}
@@ -281,7 +326,7 @@ export default function AvailabilityGrid({
                   {timeRows.map((time) => (
                     <>
                       <div
-                        className="flex h-12 items-center justify-end pr-4 text-xs font-medium text-ink-soft"
+                        className="sticky-time-cell flex h-11 items-center justify-end pr-2 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
                         key={`${time}-label`}
                       >
                         {formatTimeLabel(time)}
@@ -293,12 +338,16 @@ export default function AvailabilityGrid({
                         return (
                           <button
                             className={cn(
-                              'h-12 rounded-2xl border transition-all duration-100',
+                              'h-11 rounded-[18px] border transition-all duration-100 sm:h-12 sm:rounded-2xl',
                               isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft hover:bg-primary/8',
                             )}
+                            aria-pressed={isSelected}
+                            data-slot-key={slotKey}
                             key={slotKey}
                             onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
-                            onPointerEnter={() => handlePointerEnter(slotKey)}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                            onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
                             type="button"
                           />
                         );
@@ -327,13 +376,13 @@ export default function AvailabilityGrid({
       {statusMessage ? <p className="text-sm text-success">{statusMessage}</p> : null}
       {errorMessage ? <p className="text-sm text-danger">{errorMessage}</p> : null}
 
-      <div className="flex flex-col items-start justify-between gap-4 rounded-[28px] bg-tertiary-soft/70 p-5 md:flex-row md:items-center">
+      <div className="flex flex-col items-start justify-between gap-4 rounded-[24px] bg-tertiary-soft/70 p-4 sm:rounded-[28px] sm:p-5 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold text-tertiary">{selectedSlots.size} slots selected</p>
           <p className="mt-1 text-sm text-tertiary/80">Submit to save your response and reveal the shared overlap.</p>
         </div>
         <button
-          className="rounded-2xl bg-primary px-6 py-3.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-2xl bg-primary px-6 py-3.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           disabled={isSubmitting}
           onClick={() => void handleSubmit()}
           type="button"

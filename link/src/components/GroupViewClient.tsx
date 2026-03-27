@@ -44,7 +44,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
 
   if (hasSubmitted === null) {
     return (
-      <section className="panel-border rounded-[28px] bg-white p-6 shadow-soft">
+      <section className="panel-border rounded-[24px] bg-white p-5 shadow-soft sm:rounded-[28px] sm:p-6">
         <p className="text-sm font-medium text-ink-soft">Loading group view...</p>
       </section>
     );
@@ -52,7 +52,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
 
   if (!hasSubmitted) {
     return (
-      <section className="panel-border rounded-[28px] bg-white p-6 shadow-soft">
+      <section className="panel-border rounded-[24px] bg-white p-5 shadow-soft sm:rounded-[28px] sm:p-6">
         <h1 className="font-headline text-3xl font-bold tracking-tight text-ink">Submit availability first</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft">
           The group view unlocks after you save your response for this event.
@@ -71,20 +71,20 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
 
   return (
     <>
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_340px]">
-        <div className="panel-border panel-shadow rounded-[32px] bg-white p-6 sm:p-8">
-          <div className="flex flex-col gap-8">
+      <section className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.08fr)_340px]">
+        <div className="panel-border panel-shadow rounded-[24px] bg-white p-4 sm:rounded-[32px] sm:p-8">
+          <div className="flex flex-col gap-5 sm:gap-8">
             <div>
-              <h1 className="max-w-3xl font-headline text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+              <h1 className="max-w-3xl font-headline text-2xl font-extrabold tracking-tight text-ink sm:text-5xl">
                 Group view for {initialEvent.title}
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-ink-soft sm:text-lg">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft sm:mt-4 sm:text-lg sm:leading-7">
                 Everyone&apos;s saved availability is collected here so the strongest overlap stands out quickly.
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[24px] bg-surface-soft p-4">
+            <div className="grid gap-2.5 md:grid-cols-2 sm:gap-3">
+              <div className="rounded-[18px] bg-surface-soft p-3 sm:rounded-[24px] sm:p-4">
                 <div className="flex items-center gap-3">
                   <CalendarRange className="h-5 w-5 text-primary" />
                   <div>
@@ -94,7 +94,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
                 </div>
               </div>
 
-              <div className="rounded-[24px] bg-surface-soft p-4">
+              <div className="rounded-[18px] bg-surface-soft p-3 sm:rounded-[24px] sm:p-4">
                 <div className="flex items-center gap-3">
                   <Clock3 className="h-5 w-5 text-primary" />
                   <div>
@@ -107,7 +107,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
                 </div>
               </div>
 
-              <div className="rounded-[24px] bg-surface-soft p-4">
+              <div className="rounded-[18px] bg-surface-soft p-3 sm:rounded-[24px] sm:p-4">
                 <div className="flex items-center gap-3">
                   <MapPin className="h-5 w-5 text-primary" />
                   <div>
@@ -119,7 +119,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
 
               <div className="relative">
                 <button
-                  className="w-full rounded-[24px] bg-surface-soft p-4 text-left transition-colors duration-150 hover:bg-[#eef2fb] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                  className="w-full rounded-[18px] bg-surface-soft p-3 text-left transition-colors duration-150 hover:bg-[#eef2fb] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 sm:rounded-[24px] sm:p-4"
                   onBlur={() => setIsResponsesOpen(false)}
                   onClick={() => setIsResponsesOpen((current) => !current)}
                   onFocus={() => setIsResponsesOpen(true)}
@@ -138,14 +138,14 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
                         {participantName ? `You submitted as ${participantName}.` : 'Your response has been saved.'}
                       </p>
                       <p className="mt-2 text-xs font-medium text-primary">
-                        {initialEvent.responses.length > 0 ? 'Hover to see who has replied so far.' : 'Waiting for the first response.'}
+                        {initialEvent.responses.length > 0 ? 'Tap to see who has replied so far.' : 'Waiting for the first response.'}
                       </p>
                     </div>
                   </div>
                 </button>
 
                 {isResponsesOpen && responderNames.length > 0 ? (
-                  <div className="pointer-events-none absolute left-0 right-0 top-[calc(100%+12px)] z-20 rounded-3xl border border-line bg-white p-4 shadow-soft">
+                  <div className="pointer-events-none absolute left-0 right-0 top-[calc(100%+12px)] z-20 rounded-[24px] border border-line bg-white p-4 shadow-soft">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft">People who replied</p>
                     <div className="mt-3 space-y-2">
                       {responderNames.map((name) => (
@@ -161,10 +161,10 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <ShareLinkBox eventId={initialEvent.id} />
 
-          <div className="panel-border rounded-[26px] bg-white p-5 shadow-soft">
+          <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[26px] sm:p-5">
             <p className="text-sm font-semibold text-ink">Need to make changes?</p>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
               You can go back and update your availability at any time. The group view will reflect your latest saved response.

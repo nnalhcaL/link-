@@ -77,3 +77,14 @@ textarea {
   user-select: none;
 }
 
+.sticky-time-cell {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: var(--page-surface);
+  box-shadow: 14px 0 18px -20px rgba(34, 41, 53, 0.4);
+}
+
+.sticky-time-cell--corner {
+  z-index: 20;
+}

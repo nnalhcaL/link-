@@ -91,23 +91,23 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
 
   return (
     <>
-      <section className="panel-border panel-shadow rounded-[32px] bg-white p-6 sm:p-8">
-        <div className="flex flex-col gap-8">
+      <section className="panel-border panel-shadow rounded-[24px] bg-white p-5 sm:rounded-[32px] sm:p-8">
+        <div className="flex flex-col gap-6 sm:gap-8">
           <div>
-            <h1 className="max-w-3xl font-headline text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+            <h1 className="max-w-3xl font-headline text-3xl font-extrabold tracking-tight text-ink sm:text-5xl">
               {initialEvent.title}
             </h1>
             {initialEvent.description ? (
-              <p className="mt-4 max-w-2xl text-base leading-7 text-ink-soft sm:text-lg">{initialEvent.description}</p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft sm:mt-4 sm:text-lg sm:leading-7">{initialEvent.description}</p>
             ) : (
-              <p className="mt-4 max-w-2xl text-base leading-7 text-ink-soft sm:text-lg">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft sm:mt-4 sm:text-lg sm:leading-7">
                 Share this page with your group, then choose the times that work for you.
               </p>
             )}
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-[24px] bg-surface-soft p-4">
+            <div className="rounded-[20px] bg-surface-soft p-3.5 sm:rounded-[24px] sm:p-4">
               <div className="flex items-center gap-3">
                 <CalendarRange className="h-5 w-5 text-primary" />
                 <div>
@@ -117,7 +117,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
               </div>
             </div>
 
-            <div className="rounded-[24px] bg-surface-soft p-4">
+            <div className="rounded-[20px] bg-surface-soft p-3.5 sm:rounded-[24px] sm:p-4">
               <div className="flex items-center gap-3">
                 <Clock3 className="h-5 w-5 text-primary" />
                 <div>
@@ -130,7 +130,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
               </div>
             </div>
 
-            <div className="rounded-[24px] bg-surface-soft p-4">
+            <div className="rounded-[20px] bg-surface-soft p-3.5 sm:rounded-[24px] sm:p-4">
               <div className="flex items-center gap-3">
                 <MapPin className="h-5 w-5 text-primary" />
                 <div>
@@ -140,7 +140,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
               </div>
             </div>
 
-            <div className="rounded-[24px] bg-surface-soft p-4">
+            <div className="rounded-[20px] bg-surface-soft p-3.5 sm:rounded-[24px] sm:p-4">
               <div className="flex items-center gap-3">
                 <Users className="h-5 w-5 text-primary" />
                 <div>

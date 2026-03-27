@@ -50,20 +50,21 @@ export default function ShareLinkBox({eventId}: ShareLinkBoxProps) {
   }
 
   return (
-    <div className="panel-border rounded-[26px] bg-white p-4 shadow-soft">
+    <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[26px] sm:p-5">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
         <Link2 className="h-4 w-4 text-primary" />
         Share this link
       </div>
-      <div className="flex items-center gap-3 rounded-2xl bg-surface-soft px-4 py-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[18px] bg-surface-soft px-3 py-3 sm:gap-3 sm:rounded-2xl sm:px-4">
         <p className="min-w-0 flex-1 truncate text-sm text-ink-soft">{fullUrl}</p>
         <button
           aria-label="Copy event link"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary sm:w-10 sm:px-0"
           onClick={handleCopy}
           type="button"
         >
           {copyState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          <span className="text-xs font-semibold sm:hidden">{copyState === 'copied' ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
       <p className="mt-3 text-sm text-primary">
