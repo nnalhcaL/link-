@@ -24,7 +24,7 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
 
   function tooltip(summary: SlotSummary) {
     return (
-      <div className="pointer-events-none absolute left-1/2 top-0 z-20 w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl">
+      <div className="pointer-events-none absolute left-1/2 top-0 z-50 w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
           {formatDateLabel(summary.date)} at {formatTimeLabel(summary.time)}
         </p>
@@ -105,7 +105,9 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
 
                     return (
                       <button
-                        className="relative flex h-11 items-center justify-center rounded-[18px] border border-white text-xs font-semibold text-white transition-transform duration-150 hover:scale-[1.03] sm:h-12 sm:rounded-2xl"
+                        className={`relative flex h-11 items-center justify-center rounded-[18px] border border-white text-xs font-semibold text-white transition-transform duration-150 hover:scale-[1.03] sm:h-12 sm:rounded-2xl ${
+                          isHovered || isSelected ? 'z-30' : 'z-[1]'
+                        }`}
                         key={slotKey}
                         onBlur={() => setHoveredSlotKey(null)}
                         onClick={() => setSelectedSlotKey(slotKey)}

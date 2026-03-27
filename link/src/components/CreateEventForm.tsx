@@ -183,45 +183,47 @@ export default function CreateEventForm() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-ink">Start date</span>
-              <div className="relative">
-                <CalendarRange className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
-                <input
-                  type="date"
-                  className={cn(
-                    'w-full rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150',
-                    fieldErrors.dates
-                      ? 'border-danger'
-                      : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
-                  )}
-                  value={startDate}
-                  onChange={(event) => {
-                    setFieldErrors((current) => ({...current, dates: undefined}));
-                    setStartDate(event.target.value);
-                  }}
-                />
-              </div>
+              <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
+                <CalendarRange className="h-4 w-4 text-primary" />
+                Start date
+              </span>
+              <input
+                type="date"
+                className={cn(
+                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                  fieldErrors.dates
+                    ? 'border-danger'
+                    : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
+                )}
+                max={endDate || undefined}
+                value={startDate}
+                onChange={(event) => {
+                  setFieldErrors((current) => ({...current, dates: undefined}));
+                  setStartDate(event.target.value);
+                }}
+              />
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-ink">End date</span>
-              <div className="relative">
-                <CalendarRange className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
-                <input
-                  type="date"
-                  className={cn(
-                    'w-full rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150',
-                    fieldErrors.dates
-                      ? 'border-danger'
-                      : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
-                  )}
-                  value={endDate}
-                  onChange={(event) => {
-                    setFieldErrors((current) => ({...current, dates: undefined}));
-                    setEndDate(event.target.value);
-                  }}
-                />
-              </div>
+              <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
+                <CalendarRange className="h-4 w-4 text-primary" />
+                End date
+              </span>
+              <input
+                type="date"
+                className={cn(
+                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                  fieldErrors.dates
+                    ? 'border-danger'
+                    : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
+                )}
+                min={startDate || undefined}
+                value={endDate}
+                onChange={(event) => {
+                  setFieldErrors((current) => ({...current, dates: undefined}));
+                  setEndDate(event.target.value);
+                }}
+              />
             </label>
           </div>
           {fieldErrors.dates ? <p className="mt-2 text-sm text-danger">{fieldErrors.dates}</p> : null}

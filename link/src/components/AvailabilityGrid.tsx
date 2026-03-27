@@ -93,7 +93,7 @@ export default function AvailabilityGrid({
     });
   }
 
-  function finishDrag(pointerId?: number, element?: HTMLButtonElement | null) {
+  function finishDrag(pointerId?: number, element?: HTMLElement | null) {
     if (typeof pointerId === 'number' && element?.hasPointerCapture(pointerId)) {
       element.releasePointerCapture(pointerId);
     }
@@ -144,11 +144,13 @@ export default function AvailabilityGrid({
     lastPaintedSlotRef.current = null;
     setErrorMessage(null);
     setStatusMessage(null);
-    eventPointer.currentTarget.setPointerCapture(eventPointer.pointerId);
+    if (eventPointer.pointerType !== 'touch') {
+      eventPointer.currentTarget.setPointerCapture(eventPointer.pointerId);
+    }
     paintSlot(slotKey, mode, true);
   }
 
-  function handlePointerMove(eventPointer: ReactPointerEvent<HTMLButtonElement>) {
+  function handlePointerMove(eventPointer: ReactPointerEvent<HTMLElement>) {
     if (!isDragging || activePointerIdRef.current !== eventPointer.pointerId) {
       return;
     }
@@ -306,7 +308,7 @@ export default function AvailabilityGrid({
             )}
           >
             <div className="grid-scroll overflow-x-auto pb-1">
-              <div className="slot-grid pr-2 sm:pr-4" style={{minWidth: `${gridMinWidth}px`}}>
+              <div className="slot-grid pr-2 sm:pr-4" onPointerMove={handlePointerMove} style={{minWidth: `${gridMinWidth}px`}}>
                 <div
                   className="grid grid-cols-[72px_repeat(var(--date-count),minmax(92px,1fr))] gap-1.5 sm:grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
                   style={{'--date-count': event.dates.length} as React.CSSProperties}

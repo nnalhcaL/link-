@@ -75,7 +75,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
         <div className="panel-border panel-shadow rounded-[24px] bg-white p-4 sm:rounded-[32px] sm:p-8">
           <div className="flex flex-col gap-5 sm:gap-8">
             <div>
-              <h1 className="max-w-3xl font-headline text-2xl font-extrabold tracking-tight text-ink sm:text-5xl">
+              <h1 className="max-w-3xl font-headline text-[1.85rem] font-extrabold leading-[1.05] tracking-tight text-ink sm:text-5xl">
                 Group view for {initialEvent.title}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft sm:mt-4 sm:text-lg sm:leading-7">

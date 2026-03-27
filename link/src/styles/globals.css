@@ -63,6 +63,11 @@ textarea {
   height: 10px;
 }
 
+.grid-scroll {
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pinch-zoom;
+}
+
 .grid-scroll::-webkit-scrollbar-thumb {
   background: rgba(92, 102, 120, 0.2);
   border-radius: 999px;
@@ -73,18 +78,35 @@ textarea {
 }
 
 .slot-grid {
-  touch-action: none;
   user-select: none;
 }
 
 .sticky-time-cell {
   position: sticky;
   left: 0;
-  z-index: 10;
+  z-index: 5;
   background: var(--page-surface);
   box-shadow: 14px 0 18px -20px rgba(34, 41, 53, 0.4);
 }
 
 .sticky-time-cell--corner {
-  z-index: 20;
+  z-index: 6;
+}
+
+.date-input {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.date-input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.date-input::-webkit-datetime-edit {
+  padding: 0;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
 }
