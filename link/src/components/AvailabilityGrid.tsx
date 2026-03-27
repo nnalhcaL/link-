@@ -36,7 +36,7 @@ export default function AvailabilityGrid({
   const lastPaintedSlotRef = useRef<string | null>(null);
   const timeRows = generateTimeRows(event.timeRangeStart, event.timeRangeEnd);
   const initialSignature = initialAvailability.join('|');
-  const gridMinWidth = Math.max(320, 60 + event.dates.length * 88);
+  const gridMinWidth = Math.max(264, event.dates.length * 88);
 
   useEffect(() => {
     setSelectedSlots(new Set(initialAvailability));
@@ -299,7 +299,7 @@ export default function AvailabilityGrid({
         </div>
       </div>
 
-      <div className="panel-border rounded-[24px] bg-white p-3 pb-5 shadow-soft sm:rounded-[32px] sm:p-6">
+      <div className="panel-border rounded-[24px] bg-white p-3 pb-6 shadow-soft sm:rounded-[32px] sm:p-6">
         <div className="relative">
           <div
             className={cn(
@@ -307,55 +307,68 @@ export default function AvailabilityGrid({
               participantName ? '' : 'pointer-events-none opacity-45',
             )}
           >
-            <div className="grid-scroll overflow-x-auto px-1 pb-4 pt-2 sm:px-0 sm:pb-1 sm:pt-0">
-              <div className="slot-grid pr-5 sm:pr-4" onPointerMove={handlePointerMove} style={{minWidth: `${gridMinWidth}px`}}>
-                <div
-                  className="grid grid-cols-[60px_repeat(var(--date-count),minmax(88px,1fr))] gap-2 sm:grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
-                  style={{'--date-count': event.dates.length} as React.CSSProperties}
-                >
-                  <div className="sticky-time-cell sticky-time-cell--corner h-16 sm:h-14" />
-                  {event.dates.map((date) => {
-                    const label = formatDateHeader(date);
-
-                    return (
-                      <div className="pointer-events-none mb-2 flex min-h-[64px] flex-col items-center justify-center gap-1 py-2 text-center sm:mb-1 sm:min-h-0 sm:py-0" key={date}>
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
-                        <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
-                      </div>
-                    );
-                  })}
-
-                  {timeRows.map((time) => (
-                    <>
+            <div className="relative isolate overflow-hidden rounded-[20px] sm:rounded-[28px]">
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-4">
+                <div className="relative z-[2] bg-white">
+                  <div className="flex flex-col gap-2 pt-[72px] sm:pt-16">
+                    {timeRows.map((time) => (
                       <div
-                        className="sticky-time-cell flex h-11 items-center justify-end pr-3 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
-                        key={`${time}-label`}
+                        className="flex h-11 items-center justify-end pr-3 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
+                        key={`rail-${time}`}
                       >
                         {formatTimeLabel(time)}
                       </div>
-                      {event.dates.map((date) => {
-                        const slotKey = `${date}T${time}`;
-                        const isSelected = selectedSlots.has(slotKey);
+                    ))}
+                  </div>
+                </div>
 
-                        return (
-                          <button
-                            className={cn(
-                              'h-11 rounded-[18px] border transition-all duration-100 sm:h-12 sm:rounded-2xl',
-                              isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft hover:bg-primary/8',
-                            )}
-                            aria-pressed={isSelected}
-                            data-slot-key={slotKey}
-                            key={slotKey}
-                            onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                            onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                            type="button"
-                          />
-                        );
-                      })}
-                    </>
-                  ))}
+                <div className="relative min-w-0">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-6 bg-gradient-to-r from-white via-white/92 to-transparent sm:w-7" />
+                  <div className="grid-scroll overflow-x-auto pb-5 pt-2 sm:pb-2 sm:pt-0">
+                    <div className="slot-grid relative z-0 pr-6 sm:pr-4" onPointerMove={handlePointerMove} style={{minWidth: `${gridMinWidth}px`}}>
+                      <div
+                        className="grid grid-cols-[repeat(var(--date-count),minmax(88px,1fr))] gap-2 sm:grid-cols-[repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
+                        style={{'--date-count': event.dates.length} as React.CSSProperties}
+                      >
+                        {event.dates.map((date) => {
+                          const label = formatDateHeader(date);
+
+                          return (
+                            <div className="pointer-events-none flex h-16 flex-col items-center justify-center gap-1 text-center sm:h-14" key={date}>
+                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
+                              <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
+                            </div>
+                          );
+                        })}
+
+                        {timeRows.map((time) => (
+                          <>
+                            {event.dates.map((date) => {
+                              const slotKey = `${date}T${time}`;
+                              const isSelected = selectedSlots.has(slotKey);
+
+                              return (
+                                <button
+                                  className={cn(
+                                    'h-11 touch-none rounded-[18px] border transition-all duration-100 sm:h-12 sm:rounded-2xl',
+                                    isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft hover:bg-primary/8',
+                                  )}
+                                  aria-pressed={isSelected}
+                                  data-slot-key={slotKey}
+                                  key={slotKey}
+                                  onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
+                                  onPointerMove={handlePointerMove}
+                                  onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                  onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                  type="button"
+                                />
+                              );
+                            })}
+                          </>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

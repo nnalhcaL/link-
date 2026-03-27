@@ -176,18 +176,13 @@ export default function CreateEventForm() {
           {fieldErrors.title ? <p className="mt-2 text-sm text-danger">{fieldErrors.title}</p> : null}
         </label>
 
-        <div className="rounded-[24px] bg-surface-soft/75 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-ink">Pick dates</p>
-              <p className="mt-1 text-sm text-ink-soft">Choose the first and last day for your event.</p>
-            </div>
-            <span className="inline-flex w-fit items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-[inset_0_0_0_1px_rgba(214,220,235,0.8)]">
-              {computedDates.length}/14 selected
-            </span>
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-4">
+            <span className="text-sm font-semibold text-ink">Pick dates</span>
+            <span className="text-xs font-medium text-ink-soft">{computedDates.length}/14 selected</span>
           </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label className="block rounded-[20px] bg-white/88 p-3.5 shadow-[inset_0_0_0_1px_rgba(214,220,235,0.75)]">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <label className="block">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
                 <CalendarRange className="h-4 w-4 text-primary" />
                 Start date
@@ -195,7 +190,7 @@ export default function CreateEventForm() {
               <input
                 type="date"
                 className={cn(
-                  'date-input w-full rounded-2xl border bg-white px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
                   fieldErrors.dates
                     ? 'border-danger'
                     : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -209,7 +204,7 @@ export default function CreateEventForm() {
               />
             </label>
 
-            <label className="block rounded-[20px] bg-white/88 p-3.5 shadow-[inset_0_0_0_1px_rgba(214,220,235,0.75)]">
+            <label className="block">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
                 <CalendarRange className="h-4 w-4 text-primary" />
                 End date
@@ -217,7 +212,7 @@ export default function CreateEventForm() {
               <input
                 type="date"
                 className={cn(
-                  'date-input w-full rounded-2xl border bg-white px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
                   fieldErrors.dates
                     ? 'border-danger'
                     : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',

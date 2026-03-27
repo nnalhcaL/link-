@@ -4,7 +4,7 @@ import {useState} from 'react';
 import {Settings, Sparkles} from 'lucide-react';
 
 import type {EventRecord, SlotSummary} from '@/lib/types';
-import {buildSlotSummaries, formatDateHeader, formatDateLabel, formatTimeLabel, generateTimeRows, getHeatmapColor} from '@/lib/utils';
+import {buildSlotSummaries, cn, formatDateHeader, formatDateLabel, formatTimeLabel, generateTimeRows, getHeatmapColor} from '@/lib/utils';
 
 interface GroupHeatmapProps {
   event: EventRecord;
@@ -130,18 +130,24 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
             </div>
           </div>
         </div>
+
       </div>
 
-      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
+      <div
+        className={cn(
+          'panel-border rounded-[24px] p-4 shadow-soft sm:rounded-[28px] sm:p-5',
+          activeSummary ? 'bg-slate-950 text-white sm:bg-white sm:text-ink' : 'bg-white',
+        )}
+      >
         {activeSummary ? (
           <>
-            <p className="text-sm font-semibold text-primary">
+            <p className={cn('text-sm font-semibold', activeSummary ? 'text-white/70 sm:text-primary' : 'text-primary')}>
               {formatDateLabel(activeSummary.date)} at {formatTimeLabel(activeSummary.time)}
             </p>
-            <p className="mt-2 text-lg font-semibold text-ink">
+            <p className={cn('mt-2 text-lg font-semibold', activeSummary ? 'text-white sm:text-ink' : 'text-ink')}>
               {activeSummary.count} of {Math.max(totalParticipants, 1)} people can make this slot.
             </p>
-            <p className="mt-3 text-sm leading-6 text-ink-soft">
+            <p className={cn('mt-3 text-sm leading-6', activeSummary ? 'text-white/75 sm:text-ink-soft' : 'text-ink-soft')}>
               {activeSummary.participantNames.length > 0
                 ? activeSummary.participantNames.join(', ')
                 : 'No one has selected this slot yet.'}
