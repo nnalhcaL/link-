@@ -61,7 +61,7 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
         </div>
 
         <div className="grid-scroll overflow-x-auto">
-          <div className="min-w-[780px]">
+          <div className="min-w-[780px] pr-5 sm:pr-7">
             <div className="grid grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] gap-2" style={{'--date-count': event.dates.length} as React.CSSProperties}>
               <div className="h-14" />
               {event.dates.map((date) => {
@@ -145,4 +145,3 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
     </section>
   );
 }
-

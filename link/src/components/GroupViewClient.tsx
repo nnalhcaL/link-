@@ -5,7 +5,6 @@ import {useEffect, useState} from 'react';
 import {CalendarRange, Clock3, MapPin, Users} from 'lucide-react';
 
 import GroupHeatmap from '@/components/GroupHeatmap';
-import ParticipantList from '@/components/ParticipantList';
 import PlaceholderFeatures from '@/components/PlaceholderFeatures';
 import ShareLinkBox from '@/components/ShareLinkBox';
 import type {EventRecord} from '@/lib/types';
@@ -21,10 +20,12 @@ const SUBMITTED_STORAGE_PREFIX = 'link:submitted:';
 export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
   const [participantName, setParticipantName] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState<boolean | null>(null);
+  const [isResponsesOpen, setIsResponsesOpen] = useState(false);
 
   const participantStorageKey = `${PARTICIPANT_STORAGE_PREFIX}${initialEvent.id}`;
   const submissionStorageKey = `${SUBMITTED_STORAGE_PREFIX}${initialEvent.id}`;
   const bestOptions = getBestOptions(initialEvent);
+  const responderNames = Array.from(new Set(initialEvent.responses.map((response) => response.participantName)));
 
   useEffect(() => {
     try {
@@ -116,19 +117,45 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
                 </div>
               </div>
 
-              <div className="rounded-[24px] bg-surface-soft p-4">
-                <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft">Responses</p>
-                    <p className="mt-1 text-sm font-semibold text-ink">
-                      {initialEvent.responses.length} {initialEvent.responses.length === 1 ? 'response' : 'responses'} saved
-                    </p>
-                    <p className="mt-1 text-xs text-ink-soft">
-                      {participantName ? `You submitted as ${participantName}.` : 'Your response has been saved.'}
-                    </p>
+              <div className="relative">
+                <button
+                  className="w-full rounded-[24px] bg-surface-soft p-4 text-left transition-colors duration-150 hover:bg-[#eef2fb] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                  onBlur={() => setIsResponsesOpen(false)}
+                  onClick={() => setIsResponsesOpen((current) => !current)}
+                  onFocus={() => setIsResponsesOpen(true)}
+                  onMouseEnter={() => setIsResponsesOpen(true)}
+                  onMouseLeave={() => setIsResponsesOpen(false)}
+                  type="button"
+                >
+                  <div className="flex items-center gap-3">
+                    <Users className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft">Responses</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">
+                        {initialEvent.responses.length} {initialEvent.responses.length === 1 ? 'response' : 'responses'} saved
+                      </p>
+                      <p className="mt-1 text-xs text-ink-soft">
+                        {participantName ? `You submitted as ${participantName}.` : 'Your response has been saved.'}
+                      </p>
+                      <p className="mt-2 text-xs font-medium text-primary">
+                        {initialEvent.responses.length > 0 ? 'Hover to see who has replied so far.' : 'Waiting for the first response.'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </button>
+
+                {isResponsesOpen && responderNames.length > 0 ? (
+                  <div className="pointer-events-none absolute left-0 right-0 top-[calc(100%+12px)] z-20 rounded-3xl border border-line bg-white p-4 shadow-soft">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft">People who replied</p>
+                    <div className="mt-3 space-y-2">
+                      {responderNames.map((name) => (
+                        <div className="rounded-2xl bg-surface-soft px-3 py-2 text-sm font-medium text-ink" key={name}>
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -152,11 +179,8 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
         </div>
       </section>
 
-      <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
-          <GroupHeatmap event={initialEvent} />
-        </div>
-        <ParticipantList currentParticipantName={participantName} responses={initialEvent.responses} />
+      <section className="mt-8">
+        <GroupHeatmap event={initialEvent} />
       </section>
 
       <div className="mt-8">
