@@ -84,3 +84,14 @@ export interface SlotSummary {
   ratio: number;
   participantNames: string[];
 }
+
+export interface AvailabilityWindowSummary {
+  windowKey: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  durationHours: number;
+  count: number;
+  participantNames: string[];
+  isFullGroup: boolean;
+}

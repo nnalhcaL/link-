@@ -8,7 +8,7 @@ import GroupHeatmap from '@/components/GroupHeatmap';
 import PlaceholderFeatures from '@/components/PlaceholderFeatures';
 import ShareLinkBox from '@/components/ShareLinkBox';
 import type {EventRecord} from '@/lib/types';
-import {formatDateRange, formatTimeLabel, getBestOptions} from '@/lib/utils';
+import {formatDateRange, formatTimeLabel} from '@/lib/utils';
 
 interface GroupViewClientProps {
   initialEvent: EventRecord;
@@ -24,7 +24,6 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
 
   const participantStorageKey = `${PARTICIPANT_STORAGE_PREFIX}${initialEvent.id}`;
   const submissionStorageKey = `${SUBMITTED_STORAGE_PREFIX}${initialEvent.id}`;
-  const bestOptions = getBestOptions(initialEvent);
   const responderNames = Array.from(new Set(initialEvent.responses.map((response) => response.participantName)));
 
   useEffect(() => {
@@ -184,7 +183,7 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
       </section>
 
       <div className="mt-8">
-        <PlaceholderFeatures bestOptions={bestOptions} location={initialEvent.location} totalParticipants={initialEvent.responses.length} />
+        <PlaceholderFeatures event={initialEvent} />
       </div>
     </>
   );

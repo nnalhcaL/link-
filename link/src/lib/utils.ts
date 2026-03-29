@@ -1,7 +1,7 @@
 import {type ClassValue, clsx} from 'clsx';
 import {twMerge} from 'tailwind-merge';
 
-import type {CalendarDay, CalendarMonth, EventRecord, SlotSummary} from '@/lib/types';
+import type {AvailabilityWindowSummary, CalendarDay, CalendarMonth, EventRecord, SlotSummary} from '@/lib/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -255,17 +255,104 @@ export function buildSlotSummaries(event: EventRecord) {
   }));
 }
 
-export function getBestOptions(event: EventRecord, limit = 3) {
-  return buildSlotSummaries(event)
-    .filter((summary) => summary.count > 0)
-    .sort((left, right) => {
-      if (right.count !== left.count) {
-        return right.count - left.count;
+function compareWindowSummaries(left: AvailabilityWindowSummary, right: AvailabilityWindowSummary) {
+  if (right.count !== left.count) {
+    return right.count - left.count;
+  }
+
+  if (left.date !== right.date) {
+    return left.date.localeCompare(right.date);
+  }
+
+  return left.startTime.localeCompare(right.startTime);
+}
+
+function buildParticipantAvailabilitySets(event: EventRecord) {
+  return event.responses.map((response) => ({
+    participantName: response.participantName,
+    availabilitySet: new Set(response.availability),
+  }));
+}
+
+export function getDurationOptions(event: Pick<EventRecord, 'timeRangeStart' | 'timeRangeEnd'>) {
+  const totalHours = Math.max(1, Math.floor((timeToMinutes(event.timeRangeEnd) - timeToMinutes(event.timeRangeStart)) / 60));
+
+  return Array.from({length: totalHours}, (_, index) => index + 1);
+}
+
+export function buildAvailabilityWindowSummaries(event: EventRecord, durationHours: number) {
+  const totalParticipants = event.responses.length;
+  const timeRows = generateTimeRows(event.timeRangeStart, event.timeRangeEnd);
+
+  if (totalParticipants === 0 || durationHours < 1 || durationHours > timeRows.length) {
+    return [];
+  }
+
+  const participantAvailabilitySets = buildParticipantAvailabilitySets(event);
+  const summaries: AvailabilityWindowSummary[] = [];
+
+  for (const date of event.dates) {
+    for (let startIndex = 0; startIndex <= timeRows.length - durationHours; startIndex += 1) {
+      const startTime = timeRows[startIndex];
+      const slotKeys = timeRows
+        .slice(startIndex, startIndex + durationHours)
+        .map((time) => buildSlotKey(date, time));
+      const participantNames = participantAvailabilitySets
+        .filter(({availabilitySet}) => slotKeys.every((slotKey) => availabilitySet.has(slotKey)))
+        .map(({participantName}) => participantName)
+        .sort((left, right) => left.localeCompare(right));
+
+      if (participantNames.length === 0) {
+        continue;
       }
 
-      return left.slotKey.localeCompare(right.slotKey);
-    })
-    .slice(0, limit);
+      summaries.push({
+        windowKey: `${date}T${startTime}-${durationHours}`,
+        date,
+        startTime,
+        endTime: minutesToTime(timeToMinutes(startTime) + durationHours * 60),
+        durationHours,
+        count: participantNames.length,
+        participantNames,
+        isFullGroup: participantNames.length === totalParticipants,
+      });
+    }
+  }
+
+  return summaries.sort(compareWindowSummaries);
+}
+
+export function getLongestFullGroupWindow(event: EventRecord) {
+  if (event.responses.length === 0) {
+    return null;
+  }
+
+  const durationOptions = getDurationOptions(event);
+
+  for (let index = durationOptions.length - 1; index >= 0; index -= 1) {
+    const durationHours = durationOptions[index];
+    const longestWindow = buildAvailabilityWindowSummaries(event, durationHours).find((summary) => summary.isFullGroup);
+
+    if (longestWindow) {
+      return longestWindow;
+    }
+  }
+
+  return null;
+}
+
+export function getLongestAvailableDuration(event: EventRecord) {
+  const durationOptions = getDurationOptions(event);
+
+  for (let index = durationOptions.length - 1; index >= 0; index -= 1) {
+    const durationHours = durationOptions[index];
+
+    if (buildAvailabilityWindowSummaries(event, durationHours).length > 0) {
+      return durationHours;
+    }
+  }
+
+  return durationOptions[0] ?? 1;
 }
 
 export function getExistingAvailability(event: EventRecord, participantName: string) {
