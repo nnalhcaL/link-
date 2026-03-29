@@ -17,6 +17,9 @@ model Event {
   timeRangeEnd   String
   timezone       String     @default("America/New_York")
   location       String?
+  locationAddress String?
+  locationLatitude Float?
+  locationLongitude Float?
   createdAt      DateTime   @default(now())
   responses      Response[]
 }

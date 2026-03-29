@@ -112,6 +112,9 @@ export default function GroupViewClient({initialEvent}: GroupViewClientProps) {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-soft">Location</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{initialEvent.location || 'No location added yet'}</p>
+                    {initialEvent.locationAddress && initialEvent.locationAddress !== initialEvent.location ? (
+                      <p className="mt-1 text-xs leading-5 text-ink-soft">{initialEvent.locationAddress}</p>
+                    ) : null}
                   </div>
                 </div>
               </div>

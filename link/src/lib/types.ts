@@ -18,6 +18,7 @@ export interface ApiFieldErrors {
   timeRangeStart?: string;
   timeRangeEnd?: string;
   timezone?: string;
+  location?: string;
   participantName?: string;
   availability?: string;
   general?: string;
@@ -28,6 +29,13 @@ export interface ApiErrorResponse {
   fieldErrors?: ApiFieldErrors;
 }
 
+export interface EventLocationInput {
+  label: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface CreateEventRequest {
   title: string;
   description?: string;
@@ -35,12 +43,22 @@ export interface CreateEventRequest {
   timeRangeStart: string;
   timeRangeEnd: string;
   timezone: string;
-  location?: string;
+  location?: EventLocationInput;
 }
 
 export interface CreateEventResponse {
   id: string;
   shareUrl: string;
+}
+
+export interface LocationSearchRequest {
+  query: string;
+}
+
+export interface LocationSearchCandidate extends EventLocationInput {}
+
+export interface LocationSearchResponse {
+  candidates: LocationSearchCandidate[];
 }
 
 export interface SubmitAvailabilityRequest {
@@ -72,6 +90,9 @@ export interface EventRecord {
   timeRangeEnd: string;
   timezone: string;
   location: string | null;
+  locationAddress: string | null;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
   createdAt: string;
   responses: EventResponseRecord[];
 }
@@ -94,4 +115,18 @@ export interface AvailabilityWindowSummary {
   count: number;
   participantNames: string[];
   isFullGroup: boolean;
+}
+
+export interface SlotWeatherForecast {
+  slotKey: string;
+  weatherCode: number | null;
+  temperatureC: number | null;
+  precipitationProbability: number | null;
+}
+
+export interface EventWeatherResponse {
+  available: boolean;
+  locationLabel: string | null;
+  forecasts: SlotWeatherForecast[];
+  source: 'open-meteo';
 }

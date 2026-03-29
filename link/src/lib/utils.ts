@@ -103,6 +103,9 @@ export function serializeEventRecord(event: {
   timeRangeEnd: string;
   timezone: string;
   location: string | null;
+  locationAddress: string | null;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
   createdAt: Date;
   responses: Array<{
     id: string;
@@ -121,6 +124,9 @@ export function serializeEventRecord(event: {
     timeRangeEnd: event.timeRangeEnd,
     timezone: event.timezone,
     location: event.location,
+    locationAddress: event.locationAddress,
+    locationLatitude: event.locationLatitude,
+    locationLongitude: event.locationLongitude,
     createdAt: event.createdAt.toISOString(),
     responses: [...event.responses]
       .sort((left, right) => left.participantName.localeCompare(right.participantName))
@@ -267,6 +273,22 @@ function compareWindowSummaries(left: AvailabilityWindowSummary, right: Availabi
   return left.startTime.localeCompare(right.startTime);
 }
 
+function compareBestOptionWindowSummaries(left: AvailabilityWindowSummary, right: AvailabilityWindowSummary) {
+  if (right.count !== left.count) {
+    return right.count - left.count;
+  }
+
+  if (right.durationHours !== left.durationHours) {
+    return right.durationHours - left.durationHours;
+  }
+
+  if (left.date !== right.date) {
+    return left.date.localeCompare(right.date);
+  }
+
+  return left.startTime.localeCompare(right.startTime);
+}
+
 function buildParticipantAvailabilitySets(event: EventRecord) {
   return event.responses.map((response) => ({
     participantName: response.participantName,
@@ -322,6 +344,27 @@ export function buildAvailabilityWindowSummaries(event: EventRecord, durationHou
   return summaries.sort(compareWindowSummaries);
 }
 
+export function buildBestOptionWindowSummaries(event: EventRecord) {
+  if (event.responses.length === 0) {
+    return [];
+  }
+
+  const bestWindowByStartKey = new Map<string, AvailabilityWindowSummary>();
+
+  for (const durationHours of getDurationOptions(event)) {
+    for (const match of buildAvailabilityWindowSummaries(event, durationHours)) {
+      const startKey = `${match.date}T${match.startTime}`;
+      const currentBest = bestWindowByStartKey.get(startKey);
+
+      if (!currentBest || compareBestOptionWindowSummaries(match, currentBest) < 0) {
+        bestWindowByStartKey.set(startKey, match);
+      }
+    }
+  }
+
+  return [...bestWindowByStartKey.values()].sort(compareBestOptionWindowSummaries);
+}
+
 export function getLongestFullGroupWindow(event: EventRecord) {
   if (event.responses.length === 0) {
     return null;
@@ -343,16 +386,26 @@ export function getLongestFullGroupWindow(event: EventRecord) {
 
 export function getLongestAvailableDuration(event: EventRecord) {
   const durationOptions = getDurationOptions(event);
+  let bestDurationHours = durationOptions[0] ?? 1;
+  let bestParticipantCount = 0;
 
   for (let index = durationOptions.length - 1; index >= 0; index -= 1) {
     const durationHours = durationOptions[index];
+    const matches = buildAvailabilityWindowSummaries(event, durationHours);
 
-    if (buildAvailabilityWindowSummaries(event, durationHours).length > 0) {
-      return durationHours;
+    if (matches.length === 0) {
+      continue;
+    }
+
+    const topParticipantCount = matches[0].count;
+
+    if (topParticipantCount > bestParticipantCount || (topParticipantCount === bestParticipantCount && durationHours > bestDurationHours)) {
+      bestParticipantCount = topParticipantCount;
+      bestDurationHours = durationHours;
     }
   }
 
-  return durationOptions[0] ?? 1;
+  return bestDurationHours;
 }
 
 export function getExistingAvailability(event: EventRecord, participantName: string) {

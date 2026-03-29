@@ -1,11 +1,19 @@
 'use client';
 
-import {type FormEvent, useEffect, useState} from 'react';
+import {type FormEvent, type KeyboardEvent, useEffect, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {CalendarRange, Clock3, MapPin, PencilLine, Sparkles} from 'lucide-react';
+import {CalendarRange, Check, Clock3, LoaderCircle, MapPin, PencilLine, Search, Sparkles, X} from 'lucide-react';
 import {motion} from 'motion/react';
 
-import type {ApiErrorResponse, ApiFieldErrors, CreateEventRequest, CreateEventResponse} from '@/lib/types';
+import type {
+  ApiErrorResponse,
+  ApiFieldErrors,
+  CreateEventRequest,
+  CreateEventResponse,
+  EventLocationInput,
+  LocationSearchCandidate,
+  LocationSearchResponse,
+} from '@/lib/types';
 import {cn, isValidTimeValue, timeToMinutes, TIME_OPTIONS} from '@/lib/utils';
 
 export default function CreateEventForm() {
@@ -13,7 +21,11 @@ export default function CreateEventForm() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState<EventLocationInput | null>(null);
+  const [locationCandidates, setLocationCandidates] = useState<LocationSearchCandidate[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
   const [timezone, setTimezone] = useState('America/New_York');
   const [timeRangeStart, setTimeRangeStart] = useState('09:00');
   const [timeRangeEnd, setTimeRangeEnd] = useState('17:00');
@@ -50,6 +62,89 @@ export default function CreateEventForm() {
     }
 
     return dates;
+  }
+
+  async function handleLocationSearch() {
+    const trimmedQuery = locationQuery.trim();
+
+    if (!trimmedQuery) {
+      setLocationCandidates([]);
+      setSelectedLocation(null);
+      setLocationSearchError(null);
+      setFieldErrors((current) => ({...current, location: undefined}));
+      return;
+    }
+
+    setIsSearchingLocation(true);
+    setLocationSearchError(null);
+    setFieldErrors((current) => ({...current, location: undefined}));
+
+    try {
+      const response = await fetch('/api/location/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({query: trimmedQuery}),
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+        const nextError = errorPayload?.fieldErrors?.location ?? errorPayload?.error ?? 'We could not search for that location.';
+
+        setLocationCandidates([]);
+        setSelectedLocation(null);
+        setLocationSearchError(nextError);
+        return;
+      }
+
+      const result = (await response.json()) as LocationSearchResponse;
+
+      setLocationCandidates(result.candidates);
+      setSelectedLocation(null);
+      setLocationSearchError(
+        result.candidates.length === 0 ? 'No exact matches found yet. Try a venue, suburb, or full street address.' : null,
+      );
+    } catch {
+      setLocationCandidates([]);
+      setSelectedLocation(null);
+      setLocationSearchError('We could not search for that location right now.');
+    } finally {
+      setIsSearchingLocation(false);
+    }
+  }
+
+  function handleLocationInputChange(value: string) {
+    setLocationQuery(value);
+    setLocationCandidates([]);
+    setLocationSearchError(null);
+    setFieldErrors((current) => ({...current, location: undefined}));
+
+    if (!value.trim()) {
+      setSelectedLocation(null);
+      setLocationCandidates([]);
+      return;
+    }
+
+    if (selectedLocation && value.trim() !== selectedLocation.address) {
+      setSelectedLocation(null);
+    }
+  }
+
+  function handleLocationKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    void handleLocationSearch();
+  }
+
+  function handleLocationSelect(candidate: LocationSearchCandidate) {
+    setSelectedLocation(candidate);
+    setLocationQuery(candidate.address);
+    setLocationSearchError(null);
+    setFieldErrors((current) => ({...current, location: undefined}));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -91,6 +186,10 @@ export default function CreateEventForm() {
       }
     }
 
+    if (locationQuery.trim() && !selectedLocation) {
+      nextErrors.location = 'Choose a specific location from the search results or clear the field.';
+    }
+
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
       return;
@@ -107,7 +206,7 @@ export default function CreateEventForm() {
       timeRangeStart,
       timeRangeEnd,
       timezone,
-      location: location.trim(),
+      location: selectedLocation ?? undefined,
     };
 
     try {
@@ -177,10 +276,6 @@ export default function CreateEventForm() {
         </label>
 
         <div>
-          <div className="mb-2 flex items-center justify-between gap-4">
-            <span className="text-sm font-semibold text-ink">Pick dates</span>
-            <span className="text-xs font-medium text-ink-soft">{computedDates.length}/14 selected</span>
-          </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="block">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
@@ -281,14 +376,98 @@ export default function CreateEventForm() {
 
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-ink">Location (optional)</span>
-          <div className="relative">
-            <MapPin className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
-            <input
-              className="w-full rounded-2xl border border-transparent bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
-              onChange={(currentEvent) => setLocation(currentEvent.target.value)}
-              placeholder="City or venue"
-              value={location}
-            />
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="relative">
+                <MapPin className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+                <input
+                  className={cn(
+                    'w-full rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-12 text-sm text-ink outline-none transition-all duration-150',
+                    fieldErrors.location
+                      ? 'border-danger'
+                      : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
+                  )}
+                  onChange={(currentEvent) => handleLocationInputChange(currentEvent.target.value)}
+                  onKeyDown={handleLocationKeyDown}
+                  placeholder="Search for a venue or full address"
+                  value={locationQuery}
+                />
+
+                {locationQuery ? (
+                  <button
+                    aria-label="Clear location"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-soft transition-colors duration-150 hover:bg-white hover:text-ink"
+                    onClick={() => handleLocationInputChange('')}
+                    type="button"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSearchingLocation || !locationQuery.trim()}
+                onClick={() => void handleLocationSearch()}
+                type="button"
+              >
+                {isSearchingLocation ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {isSearchingLocation ? 'Searching...' : 'Find location'}
+              </button>
+            </div>
+
+            {selectedLocation ? (
+              <div className="rounded-2xl border border-line bg-white px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">{selectedLocation.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-ink-soft">{selectedLocation.address}</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                    <Check className="h-3.5 w-3.5" />
+                    Selected
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            {locationCandidates.length > 0 ? (
+              <div className="space-y-2">
+                {locationCandidates.map((candidate) => {
+                  const isSelected = selectedLocation?.address === candidate.address;
+
+                  return (
+                    <button
+                      className={cn(
+                        'flex w-full items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors duration-150',
+                        isSelected
+                          ? 'border-primary/30 bg-primary/5'
+                          : 'border-line bg-white hover:border-primary/20 hover:bg-surface-soft',
+                      )}
+                      key={`${candidate.address}-${candidate.latitude}-${candidate.longitude}`}
+                      onClick={() => handleLocationSelect(candidate)}
+                      type="button"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{candidate.label}</p>
+                        <p className="mt-1 text-sm leading-6 text-ink-soft">{candidate.address}</p>
+                      </div>
+                      {isSelected ? (
+                        <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {locationSearchError ? <p className="text-sm text-danger">{locationSearchError}</p> : null}
+            {fieldErrors.location ? <p className="text-sm text-danger">{fieldErrors.location}</p> : null}
+            {locationCandidates.length > 0 || selectedLocation ? (
+              <p className="text-xs leading-5 text-ink-soft">Search by OpenStreetMap</p>
+            ) : null}
           </div>
         </label>
 
@@ -307,7 +486,7 @@ export default function CreateEventForm() {
 
       <button
         className="mt-6 w-full rounded-2xl bg-primary px-5 py-4 text-base font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isSubmitting}
+        disabled={isSubmitting || isSearchingLocation}
         type="submit"
       >
         {isSubmitting ? 'Creating Link…' : 'Create Link'}
