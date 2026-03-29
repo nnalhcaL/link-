@@ -105,20 +105,27 @@ export async function POST(request: NextRequest) {
     return errorResponse('Please correct the highlighted fields.', fieldErrors);
   }
 
-  const event = await prisma.event.create({
-    data: {
-      title,
-      description,
-      dates: JSON.stringify(dates),
-      timeRangeStart: body.timeRangeStart,
-      timeRangeEnd: body.timeRangeEnd,
-      timezone,
-      location,
-      locationAddress,
-      locationLatitude,
-      locationLongitude,
-    },
-  });
+  let event;
+
+  try {
+    event = await prisma.event.create({
+      data: {
+        title,
+        description,
+        dates: JSON.stringify(dates),
+        timeRangeStart: body.timeRangeStart,
+        timeRangeEnd: body.timeRangeEnd,
+        timezone,
+        location,
+        locationAddress,
+        locationLatitude,
+        locationLongitude,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to create event.', error);
+    return errorResponse('We could not create your link just now.', undefined, 500);
+  }
 
   return NextResponse.json<CreateEventResponse>(
     {

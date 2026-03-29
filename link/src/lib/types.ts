@@ -73,6 +73,36 @@ export interface SubmitAvailabilityResponse {
   participantName: string;
 }
 
+export type GoogleCalendarConnectionState = 'unavailable' | 'ready' | 'connecting' | 'connected';
+
+export interface GoogleCalendarRecord {
+  id: string;
+  summary: string;
+  description: string | null;
+  primary: boolean;
+  selected: boolean;
+  accessRole: string;
+}
+
+export interface GoogleCalendarBusyDetail {
+  id: string;
+  slotKey: string;
+  calendarId: string;
+  calendarSummary: string;
+  title: string;
+  start: string;
+  end: string;
+  isAllDay: boolean;
+  detailsAvailable: boolean;
+}
+
+export interface GoogleCalendarImportState {
+  connectionState: GoogleCalendarConnectionState;
+  selectedCalendarIds: string[];
+  importedBusySlotKeys: string[];
+  lastImportedAt: string | null;
+}
+
 export interface EventResponseRecord {
   id: string;
   participantName: string;

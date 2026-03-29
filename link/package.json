@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "start": "next start",
     "lint": "tsc --noEmit",
+    "test:smoke": "node --test tests/create-event.smoke.test.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
