@@ -370,9 +370,9 @@ export default function CreateEventForm() {
                 onChange={(currentEvent) => setTimeRangeStart(currentEvent.target.value)}
                 value={timeRangeStart}
               >
-                {END_TIME_OPTIONS.map((timeValue) => (
+                {TIME_OPTIONS.map((timeValue) => (
                   <option key={timeValue} value={timeValue}>
-                    {timeValue === '24:00' ? formatTimeLabel(timeValue) : timeValue}
+                    {timeValue}
                   </option>
                 ))}
               </select>
@@ -394,9 +394,9 @@ export default function CreateEventForm() {
                 onChange={(currentEvent) => setTimeRangeEnd(currentEvent.target.value)}
                 value={timeRangeEnd}
               >
-                {TIME_OPTIONS.map((timeValue) => (
+                {END_TIME_OPTIONS.map((timeValue) => (
                   <option key={timeValue} value={timeValue}>
-                    {timeValue}
+                    {timeValue === '24:00' ? formatTimeLabel(timeValue) : timeValue}
                   </option>
                 ))}
               </select>
