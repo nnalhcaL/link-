@@ -16,6 +16,8 @@ import type {
 } from '@/lib/types';
 import {cn, isValidTimeValue, timeToMinutes, TIME_OPTIONS} from '@/lib/utils';
 
+const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
+
 export default function CreateEventForm() {
   const router = useRouter();
 
@@ -34,6 +36,9 @@ export default function CreateEventForm() {
   const [fieldErrors, setFieldErrors] = useState<ApiFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitDebugDetails, setSubmitDebugDetails] = useState<Pick<ApiErrorResponse, 'errorCode' | 'requestId' | 'hint' | 'details'> | null>(
+    null,
+  );
 
   useEffect(() => {
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -46,19 +51,26 @@ export default function CreateEventForm() {
   const computedDates = startDate && endDate ? getDatesInRange(startDate, endDate) : [];
 
   function getDatesInRange(start: string, end: string) {
-    const startDateObj = new Date(start);
-    const endDateObj = new Date(end);
+    const startParts = start.split('-').map(Number);
+    const endParts = end.split('-').map(Number);
 
-    if (Number.isNaN(startDateObj.getTime()) || Number.isNaN(endDateObj.getTime()) || startDateObj > endDateObj) {
+    if (startParts.length !== 3 || endParts.length !== 3 || startParts.some(Number.isNaN) || endParts.some(Number.isNaN)) {
+      return [];
+    }
+
+    const [startYear, startMonth, startDay] = startParts;
+    const [endYear, endMonth, endDay] = endParts;
+    const startDateValue = Date.UTC(startYear, startMonth - 1, startDay);
+    const endDateValue = Date.UTC(endYear, endMonth - 1, endDay);
+
+    if (!Number.isFinite(startDateValue) || !Number.isFinite(endDateValue) || startDateValue > endDateValue) {
       return [];
     }
 
     const dates: string[] = [];
-    const cursor = new Date(startDateObj);
 
-    while (cursor <= endDateObj) {
-      dates.push(cursor.toISOString().slice(0, 10));
-      cursor.setDate(cursor.getDate() + 1);
+    for (let cursor = startDateValue; cursor <= endDateValue; cursor += DAY_IN_MILLISECONDS) {
+      dates.push(new Date(cursor).toISOString().slice(0, 10));
     }
 
     return dates;
@@ -197,6 +209,7 @@ export default function CreateEventForm() {
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setSubmitDebugDetails(null);
     setFieldErrors({});
 
     const payload: CreateEventRequest = {
@@ -225,6 +238,20 @@ export default function CreateEventForm() {
           setFieldErrors(errorPayload.fieldErrors);
         }
 
+        setSubmitDebugDetails({
+          errorCode: errorPayload?.errorCode,
+          requestId: errorPayload?.requestId,
+          hint: errorPayload?.hint,
+          details: errorPayload?.details,
+        });
+        if (errorPayload?.errorCode || errorPayload?.requestId) {
+          console.error('[CreateEventForm] /api/events failed', {
+            errorCode: errorPayload?.errorCode,
+            requestId: errorPayload?.requestId,
+            hint: errorPayload?.hint,
+            details: errorPayload?.details,
+          });
+        }
         setSubmitError(errorPayload?.error ?? 'We could not create your link just now.');
         return;
       }
@@ -233,6 +260,10 @@ export default function CreateEventForm() {
       router.push(result.shareUrl);
     } catch {
       setSubmitError('We could not create your link just now.');
+      setSubmitDebugDetails({
+        errorCode: 'EVENT_CREATE_REQUEST_FAILED',
+        hint: 'The browser could not complete the request to /api/events.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -483,6 +514,14 @@ export default function CreateEventForm() {
       </div>
 
       {submitError ? <p className="mt-5 text-sm text-danger">{submitError}</p> : null}
+      {submitDebugDetails && (submitDebugDetails.errorCode || submitDebugDetails.requestId || submitDebugDetails.hint || submitDebugDetails.details) ? (
+        <div className="mt-3 rounded-2xl border border-danger/15 bg-danger/5 px-4 py-3 text-xs text-danger">
+          {submitDebugDetails.errorCode ? <p><span className="font-semibold">Code:</span> <span className="font-mono">{submitDebugDetails.errorCode}</span></p> : null}
+          {submitDebugDetails.requestId ? <p className="mt-1"><span className="font-semibold">Request:</span> <span className="font-mono">{submitDebugDetails.requestId}</span></p> : null}
+          {submitDebugDetails.hint ? <p className="mt-1">{submitDebugDetails.hint}</p> : null}
+          {submitDebugDetails.details ? <p className="mt-1 break-words text-danger/80">{submitDebugDetails.details}</p> : null}
+        </div>
+      ) : null}
 
       <button
         className="mt-6 w-full rounded-2xl bg-primary px-5 py-4 text-base font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"

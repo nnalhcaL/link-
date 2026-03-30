@@ -27,6 +27,10 @@ export interface ApiFieldErrors {
 export interface ApiErrorResponse {
   error: string;
   fieldErrors?: ApiFieldErrors;
+  errorCode?: string;
+  requestId?: string;
+  hint?: string;
+  details?: string;
 }
 
 export interface EventLocationInput {
@@ -49,6 +53,10 @@ export interface CreateEventRequest {
 export interface CreateEventResponse {
   id: string;
   shareUrl: string;
+}
+
+export interface UpdateEventLocationRequest {
+  location: EventLocationInput | null;
 }
 
 export interface LocationSearchRequest {

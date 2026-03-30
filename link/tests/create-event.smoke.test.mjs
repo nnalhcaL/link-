@@ -53,6 +53,30 @@ async function createEvent(payload) {
   return {response, body};
 }
 
+async function updateEventLocation(eventId, payload, cookieHeader) {
+  const response = await fetch(`${BASE_URL}/api/events/${eventId}/location`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cookieHeader ? {Cookie: cookieHeader} : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+
+  return {response, body};
+}
+
+function extractCookiePair(response) {
+  const setCookieHeader = response.headers.get('set-cookie');
+
+  assert.ok(setCookieHeader, 'Expected create event response to include a host access cookie.');
+
+  return setCookieHeader.split(';')[0];
+}
+
 before(async () => {
   devServer = spawn('npm', ['run', 'dev'], {
     cwd: process.cwd(),
@@ -109,6 +133,8 @@ test('creates an event without a location', async () => {
   assert.equal(event.locationAddress, null);
   assert.equal(event.locationLatitude, null);
   assert.equal(event.locationLongitude, null);
+  assert.ok(event.hostAccessSecretHash, 'Expected host access hash to be persisted.');
+  assert.ok(event.hostAccessCreatedAt, 'Expected host access timestamp to be persisted.');
 });
 
 test('creates an event with a structured location', async () => {
@@ -143,4 +169,74 @@ test('creates an event with a structured location', async () => {
   assert.equal(event.locationAddress, payload.location.address);
   assert.equal(event.locationLatitude, payload.location.latitude);
   assert.equal(event.locationLongitude, payload.location.longitude);
+  assert.ok(event.hostAccessSecretHash, 'Expected host access hash to be persisted.');
+  assert.ok(event.hostAccessCreatedAt, 'Expected host access timestamp to be persisted.');
+});
+
+test('requires the host cookie to update the event location', async () => {
+  const payload = {
+    title: 'Smoke test host location editing',
+    description: '',
+    dates: ['2026-04-03', '2026-04-04'],
+    timeRangeStart: '09:00',
+    timeRangeEnd: '17:00',
+    timezone: 'Australia/Sydney',
+  };
+
+  const {response, body} = await createEvent(payload);
+
+  assert.equal(response.status, 201, `Expected 201 but received ${response.status}: ${JSON.stringify(body)}`);
+  assert.ok(body?.id, 'Expected event id in response body.');
+
+  createdEventIds.add(body.id);
+
+  const hostCookieHeader = extractCookiePair(response);
+  const locationPayload = {
+    location: {
+      label: 'Barangaroo Reserve',
+      address: 'Walumil Lawns, Hickson Rd, Barangaroo NSW 2000, Australia',
+      latitude: -33.8607,
+      longitude: 151.2016,
+    },
+  };
+
+  const unauthorizedUpdate = await updateEventLocation(body.id, locationPayload, null);
+
+  assert.equal(
+    unauthorizedUpdate.response.status,
+    403,
+    `Expected 403 but received ${unauthorizedUpdate.response.status}: ${JSON.stringify(unauthorizedUpdate.body)}`,
+  );
+
+  const authorizedUpdate = await updateEventLocation(body.id, locationPayload, hostCookieHeader);
+
+  assert.equal(
+    authorizedUpdate.response.status,
+    200,
+    `Expected 200 but received ${authorizedUpdate.response.status}: ${JSON.stringify(authorizedUpdate.body)}`,
+  );
+  assert.equal(authorizedUpdate.body?.location, locationPayload.location.label);
+  assert.equal(authorizedUpdate.body?.locationAddress, locationPayload.location.address);
+  assert.equal(authorizedUpdate.body?.locationLatitude, locationPayload.location.latitude);
+  assert.equal(authorizedUpdate.body?.locationLongitude, locationPayload.location.longitude);
+
+  const updatedEvent = await prisma.event.findUnique({where: {id: body.id}});
+
+  assert.ok(updatedEvent, 'Expected updated event row to exist.');
+  assert.equal(updatedEvent.location, locationPayload.location.label);
+  assert.equal(updatedEvent.locationAddress, locationPayload.location.address);
+  assert.equal(updatedEvent.locationLatitude, locationPayload.location.latitude);
+  assert.equal(updatedEvent.locationLongitude, locationPayload.location.longitude);
+
+  const clearedLocation = await updateEventLocation(body.id, {location: null}, hostCookieHeader);
+
+  assert.equal(
+    clearedLocation.response.status,
+    200,
+    `Expected 200 but received ${clearedLocation.response.status}: ${JSON.stringify(clearedLocation.body)}`,
+  );
+  assert.equal(clearedLocation.body?.location, null);
+  assert.equal(clearedLocation.body?.locationAddress, null);
+  assert.equal(clearedLocation.body?.locationLatitude, null);
+  assert.equal(clearedLocation.body?.locationLongitude, null);
 });

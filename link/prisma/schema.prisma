@@ -20,6 +20,8 @@ model Event {
   locationAddress String?
   locationLatitude Float?
   locationLongitude Float?
+  hostAccessSecretHash String?
+  hostAccessCreatedAt DateTime?
   createdAt      DateTime   @default(now())
   responses      Response[]
 }
