@@ -14,7 +14,7 @@ import type {
   LocationSearchCandidate,
   LocationSearchResponse,
 } from '@/lib/types';
-import {cn, isValidTimeValue, timeToMinutes, TIME_OPTIONS} from '@/lib/utils';
+import {cn, END_TIME_OPTIONS, formatTimeLabel, isValidEndTimeValue, isValidTimeValue, timeToMinutes, TIME_OPTIONS} from '@/lib/utils';
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
@@ -188,11 +188,11 @@ export default function CreateEventForm() {
       nextErrors.timeRangeStart = 'Select a valid start time.';
     }
 
-    if (!isValidTimeValue(timeRangeEnd)) {
+    if (!isValidEndTimeValue(timeRangeEnd)) {
       nextErrors.timeRangeEnd = 'Select a valid end time.';
     }
 
-    if (isValidTimeValue(timeRangeStart) && isValidTimeValue(timeRangeEnd)) {
+    if (isValidTimeValue(timeRangeStart) && isValidEndTimeValue(timeRangeEnd)) {
       if (timeToMinutes(timeRangeStart) >= timeToMinutes(timeRangeEnd)) {
         nextErrors.timeRangeEnd = 'End time needs to be later than the start time.';
       }
@@ -370,9 +370,9 @@ export default function CreateEventForm() {
                 onChange={(currentEvent) => setTimeRangeStart(currentEvent.target.value)}
                 value={timeRangeStart}
               >
-                {TIME_OPTIONS.map((timeValue) => (
+                {END_TIME_OPTIONS.map((timeValue) => (
                   <option key={timeValue} value={timeValue}>
-                    {timeValue}
+                    {timeValue === '24:00' ? formatTimeLabel(timeValue) : timeValue}
                   </option>
                 ))}
               </select>

@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {CheckCircle2, Clock3, LoaderCircle, PencilLine, RefreshCw, UserRound} from 'lucide-react';
+import {CheckCircle2, ChevronLeft, ChevronRight, Clock3, LoaderCircle, PencilLine, RefreshCw, UserRound} from 'lucide-react';
 
 import {
   buildBusyDetailsBySlotForEvent,
@@ -46,7 +46,6 @@ interface AvailabilityGridProps {
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? '';
-
 export default function AvailabilityGrid({
   event,
   participantName,
@@ -75,6 +74,7 @@ export default function AvailabilityGrid({
   const [googleErrorMessage, setGoogleErrorMessage] = useState<string | null>(null);
   const [isImportingGoogle, setIsImportingGoogle] = useState(false);
   const [lastImportedAt, setLastImportedAt] = useState<string | null>(null);
+  const [activeMobileDateIndex, setActiveMobileDateIndex] = useState(0);
   const [activeGoogleBusySlotKey, setActiveGoogleBusySlotKey] = useState<string | null>(null);
   const [hoveredGoogleBusySlotKey, setHoveredGoogleBusySlotKey] = useState<string | null>(null);
   const [googleBusyTooltip, setGoogleBusyTooltip] = useState<{
@@ -107,6 +107,49 @@ export default function AvailabilityGrid({
   const isGoogleUnavailable = googleConnectionState === 'unavailable';
   const activeGoogleBusyDetails = activeGoogleBusySlotKey ? importedBusyDetailsBySlot[activeGoogleBusySlotKey] ?? [] : [];
   const tooltipGoogleBusyDetails = googleBusyTooltip ? importedBusyDetailsBySlot[googleBusyTooltip.slotKey] ?? [] : [];
+  const activeMobileDate = event.dates[activeMobileDateIndex] ?? event.dates[0] ?? null;
+  const activeMobileSlotKey =
+    activeGoogleBusySlotKey && activeMobileDate && activeGoogleBusySlotKey.startsWith(`${activeMobileDate}T`)
+      ? activeGoogleBusySlotKey
+      : null;
+  const activeMobileDayBusyDetails = useMemo(() => {
+    if (!activeMobileDate) {
+      return [];
+    }
+
+    const uniqueDetails = new Map<string, GoogleCalendarBusyDetail>();
+
+    for (const [slotKey, details] of Object.entries(importedBusyDetailsBySlot)) {
+      if (!slotKey.startsWith(`${activeMobileDate}T`)) {
+        continue;
+      }
+
+      for (const detail of details) {
+        const uniqueKey = `${detail.id}:${detail.start}:${detail.end}:${detail.calendarId}:${detail.title}`;
+
+        if (!uniqueDetails.has(uniqueKey)) {
+          uniqueDetails.set(uniqueKey, detail);
+        }
+      }
+    }
+
+    return [...uniqueDetails.values()].sort((left, right) => {
+      if (left.start !== right.start) {
+        return left.start.localeCompare(right.start);
+      }
+
+      if (left.end !== right.end) {
+        return left.end.localeCompare(right.end);
+      }
+
+      if (left.calendarSummary !== right.calendarSummary) {
+        return left.calendarSummary.localeCompare(right.calendarSummary);
+      }
+
+      return left.title.localeCompare(right.title);
+    });
+  }, [activeMobileDate, importedBusyDetailsBySlot]);
+  const mobileInspectorDetails = activeMobileSlotKey ? importedBusyDetailsBySlot[activeMobileSlotKey] ?? [] : activeMobileDayBusyDetails;
 
   useEffect(() => {
     setSelectedSlots(new Set(initialAvailability));
@@ -119,6 +162,19 @@ export default function AvailabilityGrid({
     setStatusMessage(null);
     setErrorMessage(null);
   }, [participantName, initialSignature, initialAvailability]);
+
+  useEffect(() => {
+    setActiveMobileDateIndex(0);
+  }, [event.id, event.dates]);
+
+  useEffect(() => {
+    if (!activeMobileDate) {
+      setActiveGoogleBusySlotKey(null);
+      return;
+    }
+
+    setActiveGoogleBusySlotKey((current) => (current?.startsWith(`${activeMobileDate}T`) ? current : null));
+  }, [activeMobileDate]);
 
   useEffect(() => {
     setNameDraft(participantName);
@@ -592,6 +648,16 @@ export default function AvailabilityGrid({
     showGoogleBusyTooltip(slotKey, date, time, eventFocus.currentTarget);
   }
 
+  function changeActiveMobileDate(direction: 'previous' | 'next') {
+    setActiveMobileDateIndex((current) => {
+      if (direction === 'previous') {
+        return Math.max(0, current - 1);
+      }
+
+      return Math.min(event.dates.length - 1, current + 1);
+    });
+  }
+
   return (
     <section className="space-y-4 sm:space-y-6">
       <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
@@ -831,77 +897,156 @@ export default function AvailabilityGrid({
             )}
           >
             <div className="relative isolate overflow-visible rounded-[20px] sm:rounded-[28px]">
-              <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-4">
-                <div className="relative z-[2] bg-white">
-                  <div className="flex flex-col gap-2 pt-[72px] sm:pt-16">
-                    {timeRows.map((time) => (
-                      <div
-                        className="flex h-11 items-center justify-end pr-3 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
-                        key={`rail-${time}`}
-                      >
-                        {formatTimeLabel(time)}
-                      </div>
-                    ))}
+              <div className="sm:hidden">
+                <div className="rounded-[20px] border border-line bg-white p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <button
+                      aria-label="Show previous day"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={activeMobileDateIndex === 0}
+                      onClick={() => changeActiveMobileDate('previous')}
+                      type="button"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    <div className="min-w-0 text-center">
+                      <p className="text-sm font-semibold text-ink">{activeMobileDate ? formatDateLabel(activeMobileDate) : 'Choose a day'}</p>
+                      <p className="mt-1 text-xs text-ink-soft">
+                        Day {Math.min(activeMobileDateIndex + 1, event.dates.length)} of {event.dates.length}
+                      </p>
+                    </div>
+
+                    <button
+                      aria-label="Show next day"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={activeMobileDateIndex >= event.dates.length - 1}
+                      onClick={() => changeActiveMobileDate('next')}
+                      type="button"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    {timeRows.map((time) => {
+                      const slotKey = `${activeMobileDate}T${time}`;
+                      const isSelected = selectedSlots.has(slotKey);
+                      const isImportedBusy = importedBusySlots.has(slotKey);
+                      const busyDetails = importedBusyDetailsBySlot[slotKey] ?? [];
+                      const isActiveGoogleBusySlot = activeGoogleBusySlotKey === slotKey && busyDetails.length > 0;
+
+                      return (
+                        <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-2" key={slotKey}>
+                          <div className="flex h-11 items-center justify-end pr-2 text-[10px] font-medium text-ink-soft">
+                            {formatTimeLabel(time).replace(':00', '')}
+                          </div>
+
+                          <button
+                            aria-pressed={isSelected}
+                            className={cn(
+                              'relative h-11 w-full touch-none rounded-[18px] border transition-all duration-100',
+                              isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft',
+                              isImportedBusy && !isSelected ? 'border-danger/20 bg-danger/5' : '',
+                              isImportedBusy && isSelected ? 'border-primary shadow-[inset_0_0_0_2px_rgba(252,165,165,0.55)]' : '',
+                              isActiveGoogleBusySlot ? 'ring-2 ring-slate-900/15' : '',
+                            )}
+                            data-slot-key={slotKey}
+                            onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                            onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                            style={
+                              isImportedBusy && !isSelected
+                                ? ({
+                                    backgroundImage:
+                                      'linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0, rgba(220, 38, 38, 0.08) 6px, rgba(255, 255, 255, 0) 6px, rgba(255, 255, 255, 0) 12px)',
+                                  } as CSSProperties)
+                                : undefined
+                            }
+                            title={isImportedBusy && busyDetails.length === 0 ? 'Google Calendar marked this slot busy. You can still override it manually.' : undefined}
+                            type="button"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+              </div>
 
-                <div className="relative min-w-0">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-6 bg-gradient-to-r from-white via-white/92 to-transparent sm:w-7" />
-                  <div className="grid-scroll overflow-x-auto pb-5 pt-2 sm:pb-2 sm:pt-0">
-                    <div className="slot-grid relative z-0 pr-6 sm:pr-4" onPointerMove={handlePointerMove} style={{minWidth: `${gridMinWidth}px`}}>
-                      <div
-                        className="grid grid-cols-[repeat(var(--date-count),minmax(88px,1fr))] gap-2 sm:grid-cols-[repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
-                        style={{'--date-count': event.dates.length} as CSSProperties}
-                      >
-                        {event.dates.map((date) => {
-                          const label = formatDateHeader(date);
+              <div className="hidden sm:block">
+                <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-x-4">
+                  <div className="relative z-[2] bg-white">
+                    <div className="flex flex-col gap-2 pt-[72px] sm:pt-16">
+                      {timeRows.map((time) => (
+                        <div
+                          className="flex h-11 items-center justify-end pr-3 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
+                          key={`desktop-time-${time}`}
+                        >
+                          {formatTimeLabel(time)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                          return (
-                            <div className="pointer-events-none flex h-16 flex-col items-center justify-center gap-1 text-center sm:h-14" key={date}>
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
-                              <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
-                            </div>
-                          );
-                        })}
+                  <div className="relative min-w-0">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-6 bg-gradient-to-r from-white via-white/92 to-transparent sm:w-7" />
+                    <div className="grid-scroll overflow-x-auto pb-5 pt-2 sm:pb-2 sm:pt-0">
+                      <div className="slot-grid relative z-0 pr-6 sm:pr-4" onPointerMove={handlePointerMove} style={{minWidth: `${gridMinWidth}px`}}>
+                        <div
+                          className="grid grid-cols-[repeat(var(--date-count),minmax(88px,1fr))] gap-2 sm:grid-cols-[repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
+                          style={{'--date-count': event.dates.length} as CSSProperties}
+                        >
+                          {event.dates.map((date) => {
+                            const label = formatDateHeader(date);
 
-                        {timeRows.map((time) => (
-                          <>
-                            {event.dates.map((date) => {
-                              const slotKey = `${date}T${time}`;
-                              const isSelected = selectedSlots.has(slotKey);
-                              const isImportedBusy = importedBusySlots.has(slotKey);
-                              const busyDetails = importedBusyDetailsBySlot[slotKey] ?? [];
-                              const isActiveGoogleBusySlot = activeGoogleBusySlotKey === slotKey && busyDetails.length > 0;
+                            return (
+                              <div className="pointer-events-none flex h-16 flex-col items-center justify-center gap-1 text-center sm:h-14" key={date}>
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
+                                <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
+                              </div>
+                            );
+                          })}
 
-                              return (
-                                <button
-                                  className={cn(
-                                    'relative h-11 touch-none rounded-[18px] border transition-all duration-100 sm:h-12 sm:rounded-2xl',
-                                    isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft hover:bg-primary/8',
-                                    isImportedBusy && !isSelected ? 'border-danger/20 bg-danger/5 hover:border-danger/30 hover:bg-danger/10' : '',
-                                    isImportedBusy && isSelected ? 'border-primary shadow-[inset_0_0_0_2px_rgba(252,165,165,0.55)]' : '',
-                                    isActiveGoogleBusySlot ? 'z-20 ring-2 ring-slate-900/15' : '',
-                                    hoveredGoogleBusySlotKey === slotKey ? 'z-30' : '',
-                                  )}
-                                  aria-pressed={isSelected}
-                                  data-slot-key={slotKey}
-                                  key={slotKey}
-                                  onFocus={(eventFocus) => handleGoogleBusyFocus(slotKey, date, time, busyDetails, eventFocus)}
-                                  onBlur={() => hideGoogleBusyTooltip(slotKey)}
-                                  onMouseEnter={(eventMouse) => handleGoogleBusyMouseEnter(slotKey, date, time, busyDetails, eventMouse)}
-                                  onMouseLeave={() => hideGoogleBusyTooltip(slotKey)}
-                                  onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
-                                  onPointerMove={handlePointerMove}
-                                  onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                                  onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                                  style={isImportedBusy && !isSelected ? ({backgroundImage: 'linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0, rgba(220, 38, 38, 0.08) 6px, rgba(255, 255, 255, 0) 6px, rgba(255, 255, 255, 0) 12px)'} as CSSProperties) : undefined}
-                                  title={isImportedBusy && busyDetails.length === 0 ? 'Google Calendar marked this slot busy. You can still override it manually.' : undefined}
-                                  type="button"
-                                />
-                              );
-                            })}
-                          </>
-                        ))}
+                          {timeRows.map((time) => (
+                            <>
+                              {event.dates.map((date) => {
+                                const slotKey = `${date}T${time}`;
+                                const isSelected = selectedSlots.has(slotKey);
+                                const isImportedBusy = importedBusySlots.has(slotKey);
+                                const busyDetails = importedBusyDetailsBySlot[slotKey] ?? [];
+                                const isActiveGoogleBusySlot = activeGoogleBusySlotKey === slotKey && busyDetails.length > 0;
+
+                                return (
+                                  <button
+                                    className={cn(
+                                      'relative h-11 touch-none rounded-[18px] border transition-all duration-100 sm:h-12 sm:rounded-2xl',
+                                      isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft hover:bg-primary/8',
+                                      isImportedBusy && !isSelected ? 'border-danger/20 bg-danger/5 hover:border-danger/30 hover:bg-danger/10' : '',
+                                      isImportedBusy && isSelected ? 'border-primary shadow-[inset_0_0_0_2px_rgba(252,165,165,0.55)]' : '',
+                                      isActiveGoogleBusySlot ? 'z-20 ring-2 ring-slate-900/15' : '',
+                                      hoveredGoogleBusySlotKey === slotKey ? 'z-30' : '',
+                                    )}
+                                    aria-pressed={isSelected}
+                                    data-slot-key={slotKey}
+                                    key={slotKey}
+                                    onFocus={(eventFocus) => handleGoogleBusyFocus(slotKey, date, time, busyDetails, eventFocus)}
+                                    onBlur={() => hideGoogleBusyTooltip(slotKey)}
+                                    onMouseEnter={(eventMouse) => handleGoogleBusyMouseEnter(slotKey, date, time, busyDetails, eventMouse)}
+                                    onMouseLeave={() => hideGoogleBusyTooltip(slotKey)}
+                                    onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
+                                    onPointerMove={handlePointerMove}
+                                    onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                    onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                    style={isImportedBusy && !isSelected ? ({backgroundImage: 'linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0, rgba(220, 38, 38, 0.08) 6px, rgba(255, 255, 255, 0) 6px, rgba(255, 255, 255, 0) 12px)'} as CSSProperties) : undefined}
+                                    title={isImportedBusy && busyDetails.length === 0 ? 'Google Calendar marked this slot busy. You can still override it manually.' : undefined}
+                                    type="button"
+                                  />
+                                );
+                              })}
+                            </>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -910,9 +1055,40 @@ export default function AvailabilityGrid({
             </div>
           </div>
 
+          {hasImportedGoogleBusyHints && activeMobileDate && mobileInspectorDetails.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-line bg-surface-soft px-4 py-3 sm:hidden">
+              <div>
+                <p className="text-sm font-semibold text-ink">
+                  {activeMobileSlotKey ? 'Google Calendar at this slot' : `Google Calendar on ${formatDateLabel(activeMobileDate)}`}
+                </p>
+                <p className="mt-1 text-sm text-ink-soft">
+                  {activeMobileSlotKey
+                    ? `${formatDateLabel(activeMobileSlotKey.slice(0, 10))} at ${formatTimeLabel(activeMobileSlotKey.slice(11))}`
+                    : 'Imported conflicts for the day you are viewing.'}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {mobileInspectorDetails.slice(0, 4).map((detail) => (
+                    <div className="rounded-lg border border-line bg-white px-3 py-2.5" key={`${detail.id}:${detail.start}:${detail.end}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-ink">{detail.title}</p>
+                          <p className="mt-1 text-xs text-ink-soft">{formatBusyDetailRange(detail)}</p>
+                        </div>
+                        <span className="shrink-0 text-xs text-ink-soft">{detail.calendarSummary}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {mobileInspectorDetails.length > 4 ? (
+                    <p className="text-xs text-ink-soft">+{mobileInspectorDetails.length - 4} more Google events</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {hasImportedGoogleBusyHints && activeGoogleBusySlotKey && activeGoogleBusyDetails.length > 0 ? (
             <div className="mt-4 rounded-xl border border-line bg-surface-soft px-4 py-3">
-              <div>
+              <div className="hidden sm:block">
                 <p className="text-sm font-semibold text-ink">Google Calendar at this slot</p>
                 <p className="mt-1 text-sm text-ink-soft">
                   {formatDateLabel(activeGoogleBusySlotKey.slice(0, 10))} at {formatTimeLabel(activeGoogleBusySlotKey.slice(11))}

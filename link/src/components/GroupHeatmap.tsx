@@ -133,21 +133,16 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
 
       </div>
 
-      <div
-        className={cn(
-          'panel-border rounded-[24px] p-4 shadow-soft sm:rounded-[28px] sm:p-5',
-          activeSummary ? 'bg-slate-950 text-white sm:bg-white sm:text-ink' : 'bg-white',
-        )}
-      >
+      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
         {activeSummary ? (
           <>
-            <p className={cn('text-sm font-semibold', activeSummary ? 'text-white/70 sm:text-primary' : 'text-primary')}>
+            <p className="text-sm font-semibold text-primary">
               {formatDateLabel(activeSummary.date)} at {formatTimeLabel(activeSummary.time)}
             </p>
-            <p className={cn('mt-2 text-lg font-semibold', activeSummary ? 'text-white sm:text-ink' : 'text-ink')}>
+            <p className="mt-2 text-lg font-semibold text-ink">
               {activeSummary.count} of {Math.max(totalParticipants, 1)} people can make this slot.
             </p>
-            <p className={cn('mt-3 text-sm leading-6', activeSummary ? 'text-white/75 sm:text-ink-soft' : 'text-ink-soft')}>
+            <p className="mt-3 text-sm leading-6 text-ink-soft">
               {activeSummary.participantNames.length > 0
                 ? activeSummary.participantNames.join(', ')
                 : 'No one has selected this slot yet.'}

@@ -296,7 +296,7 @@ export default function PlaceholderFeatures({event}: PlaceholderFeaturesProps) {
                             </p>
                           </button>
 
-                          <div className="pointer-events-none absolute right-0 top-[calc(100%+10px)] z-20 hidden w-64 rounded-xl border border-line bg-white p-3 text-left shadow-soft group-hover:block group-focus-within:block">
+                          <div className="pointer-events-none absolute left-0 top-[calc(100%+10px)] z-20 hidden w-[min(16rem,calc(100vw-4rem))] max-w-[16rem] rounded-xl border border-line bg-white p-3 text-left shadow-soft group-hover:block group-focus-within:block sm:left-auto sm:right-0 sm:w-64 sm:max-w-64">
                             <p className="text-xs font-semibold text-ink-soft">Who can make it</p>
                             <p className="mt-2 text-sm leading-6 text-ink">{match.participantNames.join(', ')}</p>
                           </div>

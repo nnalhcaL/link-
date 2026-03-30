@@ -8,6 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const TIME_OPTIONS = Array.from({length: 24}, (_, index) => minutesToTime(index * 60));
+export const END_TIME_OPTIONS = [...TIME_OPTIONS, '24:00'];
 
 export const PARTICIPANT_TONES = [
   'bg-primary/10 text-primary',
@@ -19,6 +20,10 @@ export const PARTICIPANT_TONES = [
 ];
 
 export function minutesToTime(minutes: number) {
+  if (minutes === 24 * 60) {
+    return '24:00';
+  }
+
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -31,6 +36,10 @@ export function timeToMinutes(time: string) {
 
 export function isValidTimeValue(value: string) {
   return /^([01]\d|2[0-3]):00$/.test(value);
+}
+
+export function isValidEndTimeValue(value: string) {
+  return value === '24:00' || isValidTimeValue(value);
 }
 
 export function isValidDateValue(value: string) {
@@ -78,6 +87,18 @@ export function generateTimeRows(start: string, end: string) {
   }
 
   return rows;
+}
+
+export function generateTimeBoundaryMarkers(start: string, end: string) {
+  const startMinutes = timeToMinutes(start);
+  const endMinutes = timeToMinutes(end);
+  const markers: string[] = [];
+
+  for (let value = startMinutes; value <= endMinutes; value += 60) {
+    markers.push(minutesToTime(value));
+  }
+
+  return markers;
 }
 
 export function generateSlotKeys(dates: string[], start: string, end: string) {
@@ -141,6 +162,10 @@ export function serializeEventRecord(event: {
 }
 
 export function formatTimeLabel(time: string) {
+  if (time === '24:00') {
+    return 'Midnight';
+  }
+
   const [hourString, minuteString] = time.split(':');
   const hour = Number(hourString);
   const minute = Number(minuteString);

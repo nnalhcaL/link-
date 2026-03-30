@@ -85,14 +85,14 @@ textarea {
 .sticky-time-cell {
   position: sticky;
   left: 0;
-  z-index: 5;
+  z-index: 40;
   background: var(--page-surface);
   box-shadow: 14px 0 18px -20px rgba(34, 41, 53, 0.4);
   pointer-events: none;
 }
 
 .sticky-time-cell--corner {
-  z-index: 6;
+  z-index: 41;
 }
 
 .date-input {

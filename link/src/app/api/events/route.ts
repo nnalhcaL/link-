@@ -5,7 +5,7 @@ import {Prisma} from '@prisma/client';
 import {createEventHostSecret, hashEventHostSecret, setEventHostCookie} from '@/lib/host-access';
 import {prisma} from '@/lib/prisma';
 import type {ApiErrorResponse, ApiFieldErrors, CreateEventRequest, CreateEventResponse} from '@/lib/types';
-import {isValidTimeValue, isValidTimezone, normalizeDateValues, timeToMinutes} from '@/lib/utils';
+import {isValidEndTimeValue, isValidTimeValue, isValidTimezone, normalizeDateValues, timeToMinutes} from '@/lib/utils';
 
 type IncomingCreateEventRequest = Omit<CreateEventRequest, 'location'> & {
   location?: CreateEventRequest['location'] | string;
@@ -248,11 +248,11 @@ export async function POST(request: NextRequest) {
     fieldErrors.timeRangeStart = 'Choose a valid start time.';
   }
 
-  if (!isValidTimeValue(body.timeRangeEnd)) {
+  if (!isValidEndTimeValue(body.timeRangeEnd)) {
     fieldErrors.timeRangeEnd = 'Choose a valid end time.';
   }
 
-  if (isValidTimeValue(body.timeRangeStart) && isValidTimeValue(body.timeRangeEnd)) {
+  if (isValidTimeValue(body.timeRangeStart) && isValidEndTimeValue(body.timeRangeEnd)) {
     if (timeToMinutes(body.timeRangeStart) >= timeToMinutes(body.timeRangeEnd)) {
       fieldErrors.timeRangeEnd = 'End time needs to be later than the start time.';
     }
