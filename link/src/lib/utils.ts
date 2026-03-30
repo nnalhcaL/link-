@@ -289,6 +289,19 @@ function compareBestOptionWindowSummaries(left: AvailabilityWindowSummary, right
   return left.startTime.localeCompare(right.startTime);
 }
 
+function windowsOverlapOnSameDate(left: AvailabilityWindowSummary, right: AvailabilityWindowSummary) {
+  if (left.date !== right.date) {
+    return false;
+  }
+
+  const leftStart = timeToMinutes(left.startTime);
+  const leftEnd = timeToMinutes(left.endTime);
+  const rightStart = timeToMinutes(right.startTime);
+  const rightEnd = timeToMinutes(right.endTime);
+
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
 function buildParticipantAvailabilitySets(event: EventRecord) {
   return event.responses.map((response) => ({
     participantName: response.participantName,
@@ -362,7 +375,18 @@ export function buildBestOptionWindowSummaries(event: EventRecord) {
     }
   }
 
-  return [...bestWindowByStartKey.values()].sort(compareBestOptionWindowSummaries);
+  const rankedMatches = [...bestWindowByStartKey.values()].sort(compareBestOptionWindowSummaries);
+  const uniqueMatches: AvailabilityWindowSummary[] = [];
+
+  for (const match of rankedMatches) {
+    if (uniqueMatches.some((selectedMatch) => windowsOverlapOnSameDate(selectedMatch, match))) {
+      continue;
+    }
+
+    uniqueMatches.push(match);
+  }
+
+  return uniqueMatches;
 }
 
 export function getLongestFullGroupWindow(event: EventRecord) {

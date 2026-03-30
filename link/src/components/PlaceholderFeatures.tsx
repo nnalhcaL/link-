@@ -237,7 +237,7 @@ export default function PlaceholderFeatures({event}: PlaceholderFeaturesProps) {
           <>
             {isBestOptionsSelected ? (
               <p className="text-sm leading-6 text-ink-soft">
-                Showing the best three options first, prioritizing the most people and then longer windows.
+                Showing distinct best-fit time blocks first, prioritizing the most people and then longer windows.
               </p>
             ) : (
               <p className="text-sm leading-6 text-ink-soft">
