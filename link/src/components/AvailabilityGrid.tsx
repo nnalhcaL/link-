@@ -2,6 +2,7 @@
 
 import {
   type CSSProperties,
+  Fragment,
   type FocusEvent as ReactFocusEvent,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -14,9 +15,7 @@ import {
 import {CheckCircle2, ChevronLeft, ChevronRight, Clock3, LoaderCircle, PencilLine, RefreshCw, UserRound} from 'lucide-react';
 
 import {
-  buildBusyDetailsBySlotForEvent,
-  buildBusySlotKeysForEvent,
-  buildFreeSlotKeysForEvent,
+  buildGoogleCalendarImportProjection,
   fetchGoogleBusyDetails,
   fetchGoogleBusyIntervals,
   fetchGoogleCalendars,
@@ -28,6 +27,7 @@ import {
   setGoogleReconnectHint,
   setStoredSelectedCalendarIds,
 } from '@/lib/google-calendar';
+import {shouldInspectBusySlotBeforeToggle} from '@/lib/availability-interactions';
 import type {
   EventRecord,
   GoogleCalendarBusyDetail,
@@ -53,6 +53,7 @@ export default function AvailabilityGrid({
   onSaveName,
   onSubmit,
 }: AvailabilityGridProps) {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set(initialAvailability));
   const [importedBusySlots, setImportedBusySlots] = useState<Set<string>>(new Set());
   const [importedBusyDetailsBySlot, setImportedBusyDetailsBySlot] = useState<Record<string, GoogleCalendarBusyDetail[]>>({});
@@ -495,29 +496,48 @@ export default function AvailabilityGrid({
         detailImportNotice = error instanceof Error ? error.message : 'Google Calendar event details could not be loaded.';
       }
 
-      const allDayBlockingIntervals = busyDetails
-        .filter((detail) => detail.isAllDay)
-        .map((detail) => ({
-          start: detail.start,
-          end: detail.end,
-          calendarId: detail.calendarId,
-        }));
-      const mergedBusyIntervals = [...busyIntervals, ...allDayBlockingIntervals];
-      const busySlotKeys = buildBusySlotKeysForEvent(event, mergedBusyIntervals);
-      const freeSlotKeys = buildFreeSlotKeysForEvent(event, busySlotKeys);
-      const busyDetailsBySlot = buildBusyDetailsBySlotForEvent(event, mergedBusyIntervals, busyDetails, selectedCalendars);
+      const importProjection = buildGoogleCalendarImportProjection(event, busyIntervals, busyDetails, selectedCalendars);
 
-      setImportedBusySlots(busySlotKeys);
-      setImportedBusyDetailsBySlot(busyDetailsBySlot);
+      if (isDevelopment) {
+        const debugByDate = Object.fromEntries(
+          event.dates.map((date) => [
+            date,
+            {
+              blockedSlots: [...importProjection.busySlotKeys].filter((slotKey) => slotKey.startsWith(`${date}T`)),
+              detailTitles: Object.entries(importProjection.busyDetailsBySlot)
+                .filter(([slotKey]) => slotKey.startsWith(`${date}T`))
+                .flatMap(([, details]) => details.map((detail) => `${detail.title} (${detail.start} -> ${detail.end})`)),
+            },
+          ]),
+        );
+        const debugSummary = {
+          selectedCalendars: selectedCalendars.map((calendar) => ({
+            id: calendar.id,
+            summary: calendar.summary,
+            accessRole: calendar.accessRole,
+          })),
+          blockingIntervalCount: importProjection.blockingIntervals.length,
+          busyDetailCount: busyDetails.length,
+          byDate: debugByDate,
+        };
+
+        console.info('[Google Calendar import]', {
+          eventId: event.id,
+          ...debugSummary,
+        });
+      }
+
+      setImportedBusySlots(importProjection.busySlotKeys);
+      setImportedBusyDetailsBySlot(importProjection.busyDetailsBySlot);
       setActiveGoogleBusySlotKey(null);
       setHoveredGoogleBusySlotKey(null);
       setGoogleBusyTooltip(null);
-      setSelectedSlots(new Set(freeSlotKeys));
+      setSelectedSlots(new Set(importProjection.freeSlotKeys));
       setLastImportedAt(new Date().toISOString());
       setErrorMessage(null);
       setStatusMessage(null);
       setGoogleStatusMessage(
-        busySlotKeys.size > 0
+        importProjection.busySlotKeys.size > 0
           ? detailImportNotice
             ? `Availability imported from Google. Busy markers stay visible while you adjust anything manually. ${detailImportNotice}`
             : 'Availability imported from Google. Busy markers stay visible while you adjust anything manually.'
@@ -559,9 +579,20 @@ export default function AvailabilityGrid({
     }
 
     eventPointer.preventDefault();
-    if (eventPointer.pointerType === 'touch' && importedBusyDetailsBySlot[slotKey]?.length) {
+    const hasBusyDetails = (importedBusyDetailsBySlot[slotKey]?.length ?? 0) > 0;
+
+    if (eventPointer.pointerType === 'touch' && hasBusyDetails) {
       setActiveGoogleBusySlotKey(slotKey);
+      setHoveredGoogleBusySlotKey(null);
+      setGoogleBusyTooltip(null);
     }
+
+    if (shouldInspectBusySlotBeforeToggle(eventPointer.pointerType, hasBusyDetails, activeGoogleBusySlotKey, slotKey)) {
+      setErrorMessage(null);
+      setStatusMessage(null);
+      return;
+    }
+
     const mode = selectedSlots.has(slotKey) ? 'deselect' : 'select';
     setDragMode(mode);
     setIsDragging(true);
@@ -1009,7 +1040,7 @@ export default function AvailabilityGrid({
                           })}
 
                           {timeRows.map((time) => (
-                            <>
+                            <Fragment key={`desktop-row-${time}`}>
                               {event.dates.map((date) => {
                                 const slotKey = `${date}T${time}`;
                                 const isSelected = selectedSlots.has(slotKey);
@@ -1044,7 +1075,7 @@ export default function AvailabilityGrid({
                                   />
                                 );
                               })}
-                            </>
+                            </Fragment>
                           ))}
                         </div>
                       </div>

@@ -1,7 +1,7 @@
 import {type ClassValue, clsx} from 'clsx';
 import {twMerge} from 'tailwind-merge';
 
-import type {AvailabilityWindowSummary, CalendarDay, CalendarMonth, EventRecord, SlotSummary} from '@/lib/types';
+import type {AvailabilityWindowSummary, CalendarDay, CalendarMonth, EventRecord, SlotSummary} from './types.ts';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

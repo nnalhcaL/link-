@@ -1,5 +1,5 @@
-import type {EventRecord, GoogleCalendarBusyDetail, GoogleCalendarRecord} from '@/lib/types';
-import {buildSlotKey, generateTimeRows} from '@/lib/utils';
+import type {EventRecord, GoogleCalendarBusyDetail, GoogleCalendarRecord} from './types.ts';
+import {buildSlotKey, generateTimeRows} from './utils.ts';
 
 const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
@@ -25,6 +25,7 @@ interface GoogleCalendarEventsResponse {
     summary?: string;
     status?: string;
     visibility?: string;
+    transparency?: string;
     start?: {
       date?: string;
       dateTime?: string;
@@ -70,6 +71,26 @@ interface GoogleBusyInterval {
   start: string;
   end: string;
   calendarId: string;
+}
+
+export interface GoogleCalendarBlockingInterval {
+  id: string;
+  calendarId: string;
+  calendarSummary: string;
+  title: string;
+  start: string;
+  end: string;
+  startTime: number;
+  endTime: number;
+  isAllDay: boolean;
+  detailsAvailable: boolean;
+}
+
+export interface GoogleCalendarImportProjection {
+  blockingIntervals: GoogleCalendarBlockingInterval[];
+  busySlotKeys: Set<string>;
+  freeSlotKeys: string[];
+  busyDetailsBySlot: Record<string, GoogleCalendarBusyDetail[]>;
 }
 
 interface GoogleTokenResponse {
@@ -151,6 +172,33 @@ function zonedDateTimeToUtcDate(dateValue: string, timeValue: string, timeZone: 
   return new Date(utcGuess.getTime() - refinedOffset);
 }
 
+function hasExplicitUtcOffset(dateTimeValue: string) {
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(dateTimeValue);
+}
+
+function normalizeGoogleDateTimeValue(dateTimeValue: string, timeZone: string) {
+  if (hasExplicitUtcOffset(dateTimeValue)) {
+    const parsedDate = new Date(dateTimeValue);
+
+    return Number.isFinite(parsedDate.getTime()) ? parsedDate : null;
+  }
+
+  const match = dateTimeValue.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/);
+
+  if (!match) {
+    const parsedDate = new Date(dateTimeValue);
+
+    return Number.isFinite(parsedDate.getTime()) ? parsedDate : null;
+  }
+
+  const [, dateValue, hour, minute, second = '00', fractionalSecond = '0'] = match;
+  const normalizedDate = zonedDateTimeToUtcDate(dateValue, `${hour}:${minute}`, timeZone);
+  const millisecondValue = Number(`0.${fractionalSecond}`) * 1000;
+
+  normalizedDate.setUTCSeconds(Number(second), Number.isFinite(millisecondValue) ? Math.round(millisecondValue) : 0);
+  return normalizedDate;
+}
+
 function buildEventSlotRanges(event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>) {
   return event.dates.flatMap((date) =>
     generateTimeRows(event.timeRangeStart, event.timeRangeEnd).map((time) => {
@@ -179,7 +227,7 @@ function buildEventTimeBounds(event: Pick<EventRecord, 'dates' | 'timeRangeStart
   };
 }
 
-function normalizeGoogleEventBoundary(
+export function normalizeGoogleEventBoundary(
   boundary: {date?: string; dateTime?: string; timeZone?: string} | undefined,
   fallbackTimeZone: string,
 ) {
@@ -188,9 +236,9 @@ function normalizeGoogleEventBoundary(
   }
 
   if (boundary.dateTime) {
-    const parsedDate = new Date(boundary.dateTime);
+    const parsedDate = normalizeGoogleDateTimeValue(boundary.dateTime, boundary.timeZone ?? fallbackTimeZone);
 
-    if (!Number.isFinite(parsedDate.getTime())) {
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime())) {
       return null;
     }
 
@@ -208,6 +256,170 @@ function normalizeGoogleEventBoundary(
   }
 
   return null;
+}
+
+function buildBlockingIntervalsForEvent(
+  event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>,
+  busyIntervals: GoogleBusyInterval[],
+  busyDetails: GoogleCalendarBusyDetail[],
+  calendars: GoogleCalendarRecord[],
+) {
+  const calendarLookup = new Map(calendars.map((calendar) => [calendar.id, calendar]));
+  const normalizedDetailedIntervals = busyDetails
+    .map((detail) => ({
+      id: detail.id,
+      calendarId: detail.calendarId,
+      calendarSummary: detail.calendarSummary || calendarLookup.get(detail.calendarId)?.summary || 'Google Calendar',
+      title: detail.title || 'Busy',
+      start: detail.start,
+      end: detail.end,
+      startTime: new Date(detail.start).getTime(),
+      endTime: new Date(detail.end).getTime(),
+      isAllDay: detail.isAllDay,
+      detailsAvailable: detail.detailsAvailable,
+    }))
+    .filter(
+      (detail): detail is GoogleCalendarBlockingInterval =>
+        Number.isFinite(detail.startTime) && Number.isFinite(detail.endTime) && detail.startTime < detail.endTime,
+    );
+  const normalizedFallbackIntervals = busyIntervals
+    .map((interval) => ({
+      id: `${interval.calendarId}:${interval.start}:${interval.end}:fallback`,
+      calendarId: interval.calendarId,
+      calendarSummary: calendarLookup.get(interval.calendarId)?.summary || 'Google Calendar',
+      title: 'Busy',
+      start: interval.start,
+      end: interval.end,
+      startTime: new Date(interval.start).getTime(),
+      endTime: new Date(interval.end).getTime(),
+      isAllDay: isAllDayBusyInterval(interval.start, interval.end, event.timezone),
+      detailsAvailable: false,
+    }))
+    .filter(
+      (interval): interval is GoogleCalendarBlockingInterval =>
+        Number.isFinite(interval.startTime) && Number.isFinite(interval.endTime) && interval.startTime < interval.endTime,
+    );
+  const intervalByKey = new Map<string, GoogleCalendarBlockingInterval>();
+
+  for (const interval of [...normalizedFallbackIntervals, ...normalizedDetailedIntervals]) {
+    const dedupeKey = `${interval.calendarId}:${interval.startTime}:${interval.endTime}`;
+    const existingInterval = intervalByKey.get(dedupeKey);
+
+    if (!existingInterval || (!existingInterval.detailsAvailable && interval.detailsAvailable)) {
+      intervalByKey.set(dedupeKey, interval);
+    }
+  }
+
+  return [...intervalByKey.values()].sort((left, right) => {
+    if (left.startTime !== right.startTime) {
+      return left.startTime - right.startTime;
+    }
+
+    if (left.endTime !== right.endTime) {
+      return left.endTime - right.endTime;
+    }
+
+    if (left.calendarSummary !== right.calendarSummary) {
+      return left.calendarSummary.localeCompare(right.calendarSummary);
+    }
+
+    if (left.detailsAvailable !== right.detailsAvailable) {
+      return left.detailsAvailable ? -1 : 1;
+    }
+
+    return left.title.localeCompare(right.title);
+  });
+}
+
+function buildBusySlotKeysFromBlockingIntervals(
+  event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>,
+  blockingIntervals: GoogleCalendarBlockingInterval[],
+) {
+  const slotRanges = buildEventSlotRanges(event);
+  const busySlotKeys = new Set<string>();
+
+  for (const slot of slotRanges) {
+    if (blockingIntervals.some((interval) => slot.startTime < interval.endTime && interval.startTime < slot.endTime)) {
+      busySlotKeys.add(slot.slotKey);
+    }
+  }
+
+  return busySlotKeys;
+}
+
+function buildBusyDetailsBySlotFromBlockingIntervals(
+  event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>,
+  blockingIntervals: GoogleCalendarBlockingInterval[],
+) {
+  const slotRanges = buildEventSlotRanges(event);
+  const detailsBySlot: Record<string, GoogleCalendarBusyDetail[]> = {};
+
+  for (const slot of slotRanges) {
+    const overlappingIntervals = blockingIntervals.filter(
+      (interval) => slot.startTime < interval.endTime && interval.startTime < slot.endTime,
+    );
+
+    if (overlappingIntervals.length === 0) {
+      continue;
+    }
+
+    const calendarsWithDetailedIntervals = new Set(
+      overlappingIntervals.filter((interval) => interval.detailsAvailable).map((interval) => interval.calendarId),
+    );
+    const slotDetails = overlappingIntervals
+      .filter((interval) => interval.detailsAvailable || !calendarsWithDetailedIntervals.has(interval.calendarId))
+      .map(
+        (interval) =>
+          ({
+            id: interval.id,
+            slotKey: slot.slotKey,
+            calendarId: interval.calendarId,
+            calendarSummary: interval.calendarSummary,
+            title: interval.title,
+            start: interval.start,
+            end: interval.end,
+            isAllDay: interval.isAllDay,
+            detailsAvailable: interval.detailsAvailable,
+          }) satisfies GoogleCalendarBusyDetail,
+      );
+
+    if (slotDetails.length === 0) {
+      continue;
+    }
+
+    const seen = new Set<string>();
+    detailsBySlot[slot.slotKey] = slotDetails
+      .sort((left, right) => {
+        const leftStart = new Date(left.start).getTime();
+        const rightStart = new Date(right.start).getTime();
+
+        if (leftStart !== rightStart) {
+          return leftStart - rightStart;
+        }
+
+        if (left.calendarSummary !== right.calendarSummary) {
+          return left.calendarSummary.localeCompare(right.calendarSummary);
+        }
+
+        if (left.detailsAvailable !== right.detailsAvailable) {
+          return left.detailsAvailable ? -1 : 1;
+        }
+
+        return left.title.localeCompare(right.title);
+      })
+      .filter((detail) => {
+        const uniqueKey = `${detail.id}:${detail.start}:${detail.end}:${detail.calendarId}:${detail.title}`;
+
+        if (seen.has(uniqueKey)) {
+          return false;
+        }
+
+        seen.add(uniqueKey);
+        return true;
+      });
+  }
+
+  return detailsBySlot;
 }
 
 function normalizeStoredCalendarIds(value: string | null) {
@@ -482,7 +694,7 @@ async function fetchGoogleCalendarEventsForCalendar(
     url.searchParams.set('timeMin', timeMin);
     url.searchParams.set('timeMax', timeMax);
     url.searchParams.set('maxResults', '2500');
-    url.searchParams.set('fields', 'items(id,summary,status,visibility,start,end),nextPageToken');
+    url.searchParams.set('fields', 'items(id,summary,status,visibility,transparency,start,end),nextPageToken');
 
     if (pageToken) {
       url.searchParams.set('pageToken', pageToken);
@@ -575,117 +787,33 @@ export function buildBusyDetailsBySlotForEvent(
   busyDetails: GoogleCalendarBusyDetail[],
   calendars: GoogleCalendarRecord[],
 ) {
-  const slotRanges = buildEventSlotRanges(event);
-  const calendarLookup = new Map(calendars.map((calendar) => [calendar.id, calendar]));
-  const normalizedDetails = busyDetails
-    .map((detail) => ({
-      ...detail,
-      startTime: new Date(detail.start).getTime(),
-      endTime: new Date(detail.end).getTime(),
-    }))
-    .filter((detail) => Number.isFinite(detail.startTime) && Number.isFinite(detail.endTime) && detail.startTime < detail.endTime);
-  const normalizedIntervals = busyIntervals
-    .map((interval) => ({
-      ...interval,
-      startTime: new Date(interval.start).getTime(),
-      endTime: new Date(interval.end).getTime(),
-    }))
-    .filter((interval) => Number.isFinite(interval.startTime) && Number.isFinite(interval.endTime) && interval.startTime < interval.endTime);
-  const detailsBySlot: Record<string, GoogleCalendarBusyDetail[]> = {};
-
-  for (const slot of slotRanges) {
-    const slotDetails: GoogleCalendarBusyDetail[] = [];
-
-    for (const detail of normalizedDetails) {
-      if (slot.startTime >= detail.endTime || detail.startTime >= slot.endTime) {
-        continue;
-      }
-
-      slotDetails.push({
-        ...detail,
-        slotKey: slot.slotKey,
-      });
-    }
-
-    for (const interval of normalizedIntervals) {
-      if (slot.startTime >= interval.endTime || interval.startTime >= slot.endTime) {
-        continue;
-      }
-
-      const alreadyCoveredByDetailedEvent = slotDetails.some((detail) => detail.calendarId === interval.calendarId);
-
-      if (alreadyCoveredByDetailedEvent) {
-        continue;
-      }
-
-      slotDetails.push({
-        id: `${interval.calendarId}:${interval.start}:${interval.end}:fallback`,
-        slotKey: slot.slotKey,
-        calendarId: interval.calendarId,
-        calendarSummary: calendarLookup.get(interval.calendarId)?.summary || 'Google Calendar',
-        title: 'Busy',
-        start: interval.start,
-        end: interval.end,
-        isAllDay: isAllDayBusyInterval(interval.start, interval.end, event.timezone),
-        detailsAvailable: false,
-      });
-    }
-
-    if (slotDetails.length === 0) {
-      continue;
-    }
-
-    const seen = new Set<string>();
-    detailsBySlot[slot.slotKey] = slotDetails
-      .sort((left, right) => {
-        const leftStart = new Date(left.start).getTime();
-        const rightStart = new Date(right.start).getTime();
-
-        if (leftStart !== rightStart) {
-          return leftStart - rightStart;
-        }
-
-        if (left.calendarSummary !== right.calendarSummary) {
-          return left.calendarSummary.localeCompare(right.calendarSummary);
-        }
-
-        return left.title.localeCompare(right.title);
-      })
-      .filter((detail) => {
-        const uniqueKey = `${detail.id}:${detail.start}:${detail.end}:${detail.calendarId}:${detail.title}`;
-
-        if (seen.has(uniqueKey)) {
-          return false;
-        }
-
-        seen.add(uniqueKey);
-        return true;
-      });
-  }
-
-  return detailsBySlot;
+  const blockingIntervals = buildBlockingIntervalsForEvent(event, busyIntervals, busyDetails, calendars);
+  return buildBusyDetailsBySlotFromBlockingIntervals(event, blockingIntervals);
 }
 
 export function buildBusySlotKeysForEvent(
   event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>,
-  busyIntervals: Array<{start: string; end: string}>,
+  busyIntervals: GoogleBusyInterval[],
 ) {
-  const slotRanges = buildEventSlotRanges(event);
-  const normalizedBusyRanges = busyIntervals
-    .map((interval) => ({
-      startTime: new Date(interval.start).getTime(),
-      endTime: new Date(interval.end).getTime(),
-    }))
-    .filter((interval) => Number.isFinite(interval.startTime) && Number.isFinite(interval.endTime) && interval.startTime < interval.endTime);
-  const busySlotKeys = new Set<string>();
+  const blockingIntervals = buildBlockingIntervalsForEvent(event, busyIntervals, [], []);
+  return buildBusySlotKeysFromBlockingIntervals(event, blockingIntervals);
+}
 
-  for (const slot of slotRanges) {
-    if (normalizedBusyRanges.some((interval) => slot.startTime < interval.endTime && interval.startTime < slot.endTime)) {
-      busySlotKeys.add(slot.slotKey);
-    }
-  }
+export function buildGoogleCalendarImportProjection(
+  event: Pick<EventRecord, 'dates' | 'timeRangeStart' | 'timeRangeEnd' | 'timezone'>,
+  busyIntervals: GoogleBusyInterval[],
+  busyDetails: GoogleCalendarBusyDetail[],
+  calendars: GoogleCalendarRecord[],
+): GoogleCalendarImportProjection {
+  const blockingIntervals = buildBlockingIntervalsForEvent(event, busyIntervals, busyDetails, calendars);
+  const busySlotKeys = buildBusySlotKeysFromBlockingIntervals(event, blockingIntervals);
 
-  return busySlotKeys;
+  return {
+    blockingIntervals,
+    busySlotKeys,
+    freeSlotKeys: buildFreeSlotKeysForEvent(event, busySlotKeys),
+    busyDetailsBySlot: buildBusyDetailsBySlotFromBlockingIntervals(event, blockingIntervals),
+  };
 }
 
 export function buildFreeSlotKeysForEvent(
