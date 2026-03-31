@@ -30,6 +30,10 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
   const responderNames = Array.from(new Set(event.responses.map((response) => response.participantName)));
 
   useEffect(() => {
+    setEvent(initialEvent);
+  }, [initialEvent]);
+
+  useEffect(() => {
     try {
       const savedName = window.localStorage.getItem(participantStorageKey)?.trim() ?? '';
       const savedSubmission = window.localStorage.getItem(submissionStorageKey)?.trim() ?? '';
@@ -51,25 +55,7 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
       </section>
     );
   }
-
-  if (!hasSubmitted) {
-    return (
-      <section className="panel-border rounded-[24px] bg-white p-5 shadow-soft sm:rounded-[28px] sm:p-6">
-        <h1 className="font-headline text-3xl font-bold tracking-tight text-ink">Submit availability first</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-soft">
-          The group view unlocks after you save your response for this event.
-        </p>
-        <div className="mt-5">
-          <Link
-            className="inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d]"
-            href={`/event/${initialEvent.id}#availability`}
-          >
-            Go to availability
-          </Link>
-        </div>
-      </section>
-    );
-  }
+  const canEditLocationAfterSubmit = canEditLocation && hasSubmitted;
 
   return (
     <>
@@ -84,6 +70,23 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
                 Everyone&apos;s saved availability is collected here so the strongest overlap stands out quickly.
               </p>
             </div>
+
+            {!hasSubmitted ? (
+              <div className="rounded-[18px] border border-line bg-surface-soft px-4 py-3 sm:rounded-[20px]">
+                <p className="text-sm font-semibold text-ink">Viewing the group availability</p>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="max-w-2xl text-sm leading-6 text-ink-soft">
+                    You&apos;re looking around without a saved response yet. Go back anytime to add your availability and have it counted here.
+                  </p>
+                  <Link
+                    className="inline-flex shrink-0 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary"
+                    href={`/event/${event.id}#availability`}
+                  >
+                    Add your availability
+                  </Link>
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-2.5 md:grid-cols-2 sm:gap-3">
               <div className="rounded-[18px] bg-surface-soft p-3 sm:rounded-[24px] sm:p-4">
@@ -109,7 +112,7 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
                 </div>
               </div>
 
-              <EditableLocationCard canEditLocation={canEditLocation} event={event} onEventUpdate={setEvent} />
+              <EditableLocationCard canEditLocation={canEditLocationAfterSubmit} event={event} onEventUpdate={setEvent} />
 
               <div className="relative">
                 <button
@@ -129,7 +132,13 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
                         {event.responses.length} {event.responses.length === 1 ? 'response' : 'responses'} saved
                       </p>
                       <p className="mt-1 text-xs text-ink-soft">
-                        {participantName ? `You submitted as ${participantName}.` : 'Your response has been saved.'}
+                        {hasSubmitted
+                          ? participantName
+                            ? `You submitted as ${participantName}.`
+                            : 'Your response has been saved.'
+                          : participantName
+                            ? `Viewing as ${participantName}. Your response is not saved yet.`
+                            : 'Viewing only. Add your availability when you are ready.'}
                       </p>
                       <p className="mt-2 text-xs font-medium text-primary">
                         {event.responses.length > 0 ? 'Tap to see who has replied so far.' : 'Waiting for the first response.'}
@@ -159,15 +168,17 @@ export default function GroupViewClient({initialEvent, canEditLocation}: GroupVi
           <ShareLinkBox eventId={event.id} />
 
           <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[26px] sm:p-5">
-            <p className="text-sm font-semibold text-ink">Need to make changes?</p>
+            <p className="text-sm font-semibold text-ink">{hasSubmitted ? 'Need to make changes?' : 'Want to add your response?'}</p>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              You can go back and update your availability at any time. The group view will reflect your latest saved response.
+              {hasSubmitted
+                ? 'You can go back and update your availability at any time. The group view will reflect your latest saved response.'
+                : 'You can keep browsing here, then head back to the availability page whenever you want your times counted in the group view.'}
             </p>
             <Link
               className="mt-4 inline-flex rounded-xl border border-line px-4 py-2.5 text-sm font-semibold text-ink transition-all duration-150 hover:border-primary/30 hover:text-primary"
               href={`/event/${event.id}#availability`}
             >
-              Edit availability
+              {hasSubmitted ? 'Edit availability' : 'Choose availability'}
             </Link>
           </div>
         </div>

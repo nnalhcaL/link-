@@ -1,5 +1,6 @@
 import {NextRequest, NextResponse} from 'next/server';
 import {Prisma} from '@prisma/client';
+import {revalidatePath} from 'next/cache';
 
 import {prisma} from '@/lib/prisma';
 import type {ApiErrorResponse, ApiFieldErrors, SubmitAvailabilityRequest, SubmitAvailabilityResponse} from '@/lib/types';
@@ -107,6 +108,9 @@ export async function POST(request: NextRequest) {
             availability: JSON.stringify(availability),
           },
         });
+
+    revalidatePath(`/event/${eventId}`);
+    revalidatePath(`/event/${eventId}/group`);
 
     return NextResponse.json<SubmitAvailabilityResponse>({
       id: response.id,

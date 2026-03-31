@@ -109,6 +109,7 @@ export default function EventPageClient({initialEvent}: EventPageClientProps) {
       setResponseId(result.id);
       setParticipantName(result.participantName);
       router.push(`/event/${initialEvent.id}/group`);
+      router.refresh();
       return {ok: true};
     } catch {
       return {ok: false, error: 'We could not save your availability.'};

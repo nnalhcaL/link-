@@ -1,5 +1,6 @@
 'use client';
 
+import {useRouter} from 'next/navigation';
 import {
   type CSSProperties,
   Fragment,
@@ -53,6 +54,7 @@ export default function AvailabilityGrid({
   onSaveName,
   onSubmit,
 }: AvailabilityGridProps) {
+  const router = useRouter();
   const isDevelopment = process.env.NODE_ENV !== 'production';
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set(initialAvailability));
   const [importedBusySlots, setImportedBusySlots] = useState<Set<string>>(new Set());
@@ -647,6 +649,12 @@ export default function AvailabilityGrid({
     setErrorMessage(result.error ?? 'We could not save your availability.');
   }
 
+  function handleContinueToGroupView() {
+    setStatusMessage(null);
+    setErrorMessage(null);
+    router.push(`/event/${event.id}/group`);
+  }
+
   function handleGoogleBusyMouseEnter(
     slotKey: string,
     date: string,
@@ -1164,16 +1172,25 @@ export default function AvailabilityGrid({
       <div className="flex flex-col items-start justify-between gap-4 rounded-[24px] bg-tertiary-soft/70 p-4 sm:rounded-[28px] sm:p-5 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold text-tertiary">{selectedSlots.size} slots selected</p>
-          <p className="mt-1 text-sm text-tertiary/80">Submit to save your response and reveal the shared overlap.</p>
+          <p className="mt-1 text-sm text-tertiary/80">Submit to save your response, or continue as a viewer to see the group overlap first.</p>
         </div>
-        <button
-          className="w-full rounded-2xl bg-primary px-6 py-3.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-          disabled={isSubmitting}
-          onClick={() => void handleSubmit()}
-          type="button"
-        >
-          {isSubmitting ? 'Saving availability…' : "Submit and View Group's Availability"}
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <button
+            className="w-full rounded-2xl bg-primary px-6 py-3.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            disabled={isSubmitting}
+            onClick={() => void handleSubmit()}
+            type="button"
+          >
+            {isSubmitting ? 'Saving availability…' : "Submit and View Group's Availability"}
+          </button>
+          <button
+            className="w-full rounded-xl border border-line bg-white px-3.5 py-2 text-sm font-medium text-ink-soft transition-colors duration-150 hover:border-primary/20 hover:text-ink sm:w-auto"
+            onClick={handleContinueToGroupView}
+            type="button"
+          >
+            Continue to view group&apos;s availability
+          </button>
+        </div>
       </div>
     </section>
   );

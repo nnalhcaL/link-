@@ -1,6 +1,12 @@
 'use client';
 
-import {useState} from 'react';
+import {
+  type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent,
+  useRef,
+  useState,
+} from 'react';
 import {Settings, Sparkles} from 'lucide-react';
 
 import type {EventRecord, SlotSummary} from '@/lib/types';
@@ -13,6 +19,13 @@ interface GroupHeatmapProps {
 export default function GroupHeatmap({event}: GroupHeatmapProps) {
   const [hoveredSlotKey, setHoveredSlotKey] = useState<string | null>(null);
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
+  const [tooltipSlot, setTooltipSlot] = useState<{
+    slotKey: string;
+    date: string;
+    time: string;
+    left: number;
+    top: number;
+  } | null>(null);
 
   const summaries = buildSlotSummaries(event);
   const summaryMap = new Map(summaries.map((summary) => [summary.slotKey, summary]));
@@ -21,21 +34,39 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
   const timeRows = generateTimeRows(event.timeRangeStart, event.timeRangeEnd);
   const totalParticipants = event.responses.length;
   const gridMinWidth = Math.max(320, 72 + event.dates.length * 92);
+  const tooltipSummary = tooltipSlot ? summaryMap.get(tooltipSlot.slotKey) ?? null : null;
+  const tooltipHostRef = useRef<HTMLDivElement>(null);
 
-  function tooltip(summary: SlotSummary) {
-    return (
-      <div className="pointer-events-none absolute left-1/2 top-0 z-50 hidden w-60 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-          {formatDateLabel(summary.date)} at {formatTimeLabel(summary.time)}
-        </p>
-        <p className="mt-2 text-sm font-semibold">
-          {summary.count} of {Math.max(totalParticipants, 1)} available
-        </p>
-        <p className="mt-2 text-sm text-white/75">
-          {summary.participantNames.length > 0 ? summary.participantNames.join(', ') : 'Nobody has marked this slot yet.'}
-        </p>
-      </div>
-    );
+  function showTooltip(
+    summary: SlotSummary,
+    target: HTMLElement,
+  ) {
+    if (!tooltipHostRef.current) {
+      return;
+    }
+
+    const hostRect = tooltipHostRef.current.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const estimatedTooltipWidth = 240;
+    const minLeft = estimatedTooltipWidth / 2 + 12;
+    const maxLeft = Math.max(minLeft, hostRect.width - estimatedTooltipWidth / 2 - 12);
+    const unclampedLeft = targetRect.left + targetRect.width / 2 - hostRect.left;
+    const left = Math.min(Math.max(unclampedLeft, minLeft), maxLeft);
+    const top = Math.max(targetRect.top - hostRect.top - 12, 16);
+
+    setHoveredSlotKey(summary.slotKey);
+    setTooltipSlot({
+      slotKey: summary.slotKey,
+      date: summary.date,
+      time: summary.time,
+      left,
+      top,
+    });
+  }
+
+  function hideTooltip(slotKey: string) {
+    setHoveredSlotKey((current) => (current === slotKey ? null : current));
+    setTooltipSlot((current) => (current?.slotKey === slotKey ? null : current));
   }
 
   return (
@@ -61,11 +92,34 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
           </div>
         </div>
 
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-0 z-[120]" ref={tooltipHostRef}>
+            {tooltipSlot && tooltipSummary ? (
+              <div
+                className="absolute hidden w-60 -translate-x-1/2 -translate-y-full rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block"
+                style={{
+                  left: `${tooltipSlot.left}px`,
+                  top: `${tooltipSlot.top}px`,
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                  {formatDateLabel(tooltipSlot.date)} at {formatTimeLabel(tooltipSlot.time)}
+                </p>
+                <p className="mt-2 text-sm font-semibold">
+                  {tooltipSummary.count} of {Math.max(totalParticipants, 1)} available
+                </p>
+                <p className="mt-2 text-sm text-white/75">
+                  {tooltipSummary.participantNames.length > 0 ? tooltipSummary.participantNames.join(', ') : 'Nobody has marked this slot yet.'}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
         <div className="grid-scroll overflow-x-auto pb-1">
           <div className="pr-3 sm:pr-7" style={{minWidth: `${gridMinWidth}px`}}>
             <div
               className="grid grid-cols-[72px_repeat(var(--date-count),minmax(92px,1fr))] gap-1.5 sm:grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
-              style={{'--date-count': event.dates.length} as React.CSSProperties}
+              style={{'--date-count': event.dates.length} as CSSProperties}
             >
               <div className="sticky-time-cell sticky-time-cell--corner h-12 sm:h-14" />
               {event.dates.map((date) => {
@@ -80,10 +134,9 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
               })}
 
               {timeRows.map((time) => (
-                <>
+                <div className="contents" key={`heatmap-row-${time}`}>
                   <div
                     className="sticky-time-cell flex h-11 items-center justify-end pr-2 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs"
-                    key={`${time}-label`}
                   >
                     {formatTimeLabel(time)}
                   </div>
@@ -109,11 +162,11 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
                           isHovered || isSelected ? 'z-30' : 'z-[1]'
                         }`}
                         key={slotKey}
-                        onBlur={() => setHoveredSlotKey(null)}
+                        onBlur={() => hideTooltip(slotKey)}
                         onClick={() => setSelectedSlotKey(slotKey)}
-                        onFocus={() => setHoveredSlotKey(slotKey)}
-                        onMouseEnter={() => setHoveredSlotKey(slotKey)}
-                        onMouseLeave={() => setHoveredSlotKey(null)}
+                        onFocus={(eventFocus: ReactFocusEvent<HTMLButtonElement>) => showTooltip(summary, eventFocus.currentTarget)}
+                        onMouseEnter={(eventMouse: ReactMouseEvent<HTMLButtonElement>) => showTooltip(summary, eventMouse.currentTarget)}
+                        onMouseLeave={() => hideTooltip(slotKey)}
                         style={{
                           backgroundColor: getHeatmapColor(summary.count, totalParticipants),
                           boxShadow: isSelected ? 'inset 0 0 0 2px rgba(255,255,255,0.65)' : undefined,
@@ -121,14 +174,14 @@ export default function GroupHeatmap({event}: GroupHeatmapProps) {
                         type="button"
                       >
                         {summary.ratio === 1 && totalParticipants > 0 ? <Sparkles className="h-4 w-4" /> : summary.count || ''}
-                        {isHovered ? tooltip(summary) : null}
                       </button>
                     );
                   })}
-                </>
+                </div>
               ))}
             </div>
           </div>
+        </div>
         </div>
 
       </div>
