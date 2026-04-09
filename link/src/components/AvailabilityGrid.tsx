@@ -28,7 +28,7 @@ import {
   setGoogleReconnectHint,
   setStoredSelectedCalendarIds,
 } from '@/lib/google-calendar';
-import {shouldInspectBusySlotBeforeToggle} from '@/lib/availability-interactions';
+import {getMobileDatePageRange, getMobileVisibleDayCount, getSlotPointerDownBehavior} from '@/lib/availability-interactions';
 import type {
   EventRecord,
   GoogleCalendarBusyDetail,
@@ -47,6 +47,27 @@ interface AvailabilityGridProps {
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? '';
+
+function formatMobilePageDate(date: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function formatMobilePageSummary(dates: string[]) {
+  if (dates.length === 0) {
+    return 'Choose dates';
+  }
+
+  if (dates.length === 1) {
+    return formatMobilePageDate(dates[0]);
+  }
+
+  return `${formatMobilePageDate(dates[0])} to ${formatMobilePageDate(dates[dates.length - 1])}`;
+}
+
 export default function AvailabilityGrid({
   event,
   participantName,
@@ -77,6 +98,7 @@ export default function AvailabilityGrid({
   const [googleErrorMessage, setGoogleErrorMessage] = useState<string | null>(null);
   const [isImportingGoogle, setIsImportingGoogle] = useState(false);
   const [lastImportedAt, setLastImportedAt] = useState<string | null>(null);
+  const [mobileVisibleDayCount, setMobileVisibleDayCount] = useState<2 | 3>(3);
   const [activeMobileDateIndex, setActiveMobileDateIndex] = useState(0);
   const [activeGoogleBusySlotKey, setActiveGoogleBusySlotKey] = useState<string | null>(null);
   const [hoveredGoogleBusySlotKey, setHoveredGoogleBusySlotKey] = useState<string | null>(null);
@@ -95,6 +117,13 @@ export default function AvailabilityGrid({
   const timeRows = useMemo(() => generateTimeRows(event.timeRangeStart, event.timeRangeEnd), [event.timeRangeEnd, event.timeRangeStart]);
   const initialSignature = initialAvailability.join('|');
   const gridMinWidth = Math.max(264, event.dates.length * 88);
+  const mobilePageRange = useMemo(
+    () => getMobileDatePageRange(activeMobileDateIndex, mobileVisibleDayCount, event.dates.length),
+    [activeMobileDateIndex, event.dates.length, mobileVisibleDayCount],
+  );
+  const mobileVisibleDates = event.dates.slice(mobilePageRange.startIndex, mobilePageRange.endIndex);
+  const mobileVisibleDateCount = Math.max(mobileVisibleDates.length, 1);
+  const mobileVisibleRangeLabel = formatMobilePageSummary(mobileVisibleDates);
   const googleImportState: GoogleCalendarImportState = useMemo(
     () => ({
       connectionState: googleConnectionState,
@@ -110,11 +139,13 @@ export default function AvailabilityGrid({
   const isGoogleUnavailable = googleConnectionState === 'unavailable';
   const activeGoogleBusyDetails = activeGoogleBusySlotKey ? importedBusyDetailsBySlot[activeGoogleBusySlotKey] ?? [] : [];
   const tooltipGoogleBusyDetails = googleBusyTooltip ? importedBusyDetailsBySlot[googleBusyTooltip.slotKey] ?? [] : [];
-  const activeMobileDate = event.dates[activeMobileDateIndex] ?? event.dates[0] ?? null;
+  const activeMobileDate = event.dates[activeMobileDateIndex] ?? mobileVisibleDates[0] ?? event.dates[0] ?? null;
   const activeMobileSlotKey =
     activeGoogleBusySlotKey && activeMobileDate && activeGoogleBusySlotKey.startsWith(`${activeMobileDate}T`)
       ? activeGoogleBusySlotKey
       : null;
+  const hasPreviousMobilePage = mobilePageRange.startIndex > 0;
+  const hasNextMobilePage = mobilePageRange.endIndex < event.dates.length;
   const activeMobileDayBusyDetails = useMemo(() => {
     if (!activeMobileDate) {
       return [];
@@ -169,6 +200,33 @@ export default function AvailabilityGrid({
   useEffect(() => {
     setActiveMobileDateIndex(0);
   }, [event.id, event.dates]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaQueryList = window.matchMedia('(min-width: 390px)');
+    const updateMobileVisibleDays = () => {
+      setMobileVisibleDayCount(getMobileVisibleDayCount(window.innerWidth));
+    };
+
+    updateMobileVisibleDays();
+
+    if (typeof mediaQueryList.addEventListener === 'function') {
+      mediaQueryList.addEventListener('change', updateMobileVisibleDays);
+
+      return () => {
+        mediaQueryList.removeEventListener('change', updateMobileVisibleDays);
+      };
+    }
+
+    mediaQueryList.addListener(updateMobileVisibleDays);
+
+    return () => {
+      mediaQueryList.removeListener(updateMobileVisibleDays);
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeMobileDate) {
@@ -574,22 +632,27 @@ export default function AvailabilityGrid({
     saveName();
   }
 
-  function handlePointerDown(slotKey: string, eventPointer: ReactPointerEvent<HTMLButtonElement>) {
+  function handlePointerDown(slotKey: string, eventPointer: ReactPointerEvent<HTMLButtonElement>, mobileDateIndex?: number) {
     if (!participantName) {
       openNameEditor();
       return;
     }
 
+    if (typeof mobileDateIndex === 'number') {
+      setActiveMobileDateIndex(mobileDateIndex);
+    }
+
     eventPointer.preventDefault();
     const hasBusyDetails = (importedBusyDetailsBySlot[slotKey]?.length ?? 0) > 0;
+    const pointerDownBehavior = getSlotPointerDownBehavior(eventPointer.pointerType, hasBusyDetails);
 
-    if (eventPointer.pointerType === 'touch' && hasBusyDetails) {
+    if (pointerDownBehavior.shouldActivateBusySlotPreview) {
       setActiveGoogleBusySlotKey(slotKey);
       setHoveredGoogleBusySlotKey(null);
       setGoogleBusyTooltip(null);
     }
 
-    if (shouldInspectBusySlotBeforeToggle(eventPointer.pointerType, hasBusyDetails, activeGoogleBusySlotKey, slotKey)) {
+    if (!pointerDownBehavior.shouldBeginPaint) {
       setErrorMessage(null);
       setStatusMessage(null);
       return;
@@ -689,11 +752,17 @@ export default function AvailabilityGrid({
 
   function changeActiveMobileDate(direction: 'previous' | 'next') {
     setActiveMobileDateIndex((current) => {
+      const {startIndex, endIndex} = getMobileDatePageRange(current, mobileVisibleDayCount, event.dates.length);
+
       if (direction === 'previous') {
-        return Math.max(0, current - 1);
+        return Math.max(0, startIndex - mobileVisibleDayCount);
       }
 
-      return Math.min(event.dates.length - 1, current + 1);
+      if (endIndex >= event.dates.length) {
+        return current;
+      }
+
+      return Math.min(event.dates.length - 1, startIndex + mobileVisibleDayCount);
     });
   }
 
@@ -940,9 +1009,9 @@ export default function AvailabilityGrid({
                 <div className="rounded-[20px] border border-line bg-white p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <button
-                      aria-label="Show previous day"
+                      aria-label="Show previous days"
                       className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={activeMobileDateIndex === 0}
+                      disabled={!hasPreviousMobilePage}
                       onClick={() => changeActiveMobileDate('previous')}
                       type="button"
                     >
@@ -950,16 +1019,16 @@ export default function AvailabilityGrid({
                     </button>
 
                     <div className="min-w-0 text-center">
-                      <p className="text-sm font-semibold text-ink">{activeMobileDate ? formatDateLabel(activeMobileDate) : 'Choose a day'}</p>
+                      <p className="text-sm font-semibold text-ink">{mobileVisibleRangeLabel}</p>
                       <p className="mt-1 text-xs text-ink-soft">
-                        Day {Math.min(activeMobileDateIndex + 1, event.dates.length)} of {event.dates.length}
+                        Days {Math.min(mobilePageRange.startIndex + 1, event.dates.length)}-{mobilePageRange.endIndex} of {event.dates.length}
                       </p>
                     </div>
 
                     <button
-                      aria-label="Show next day"
+                      aria-label="Show next days"
                       className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-soft text-ink transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={activeMobileDateIndex >= event.dates.length - 1}
+                      disabled={!hasNextMobilePage}
                       onClick={() => changeActiveMobileDate('next')}
                       type="button"
                     >
@@ -967,46 +1036,82 @@ export default function AvailabilityGrid({
                     </button>
                   </div>
 
-                  <div className="space-y-2 pt-2">
-                    {timeRows.map((time) => {
-                      const slotKey = `${activeMobileDate}T${time}`;
-                      const isSelected = selectedSlots.has(slotKey);
-                      const isImportedBusy = importedBusySlots.has(slotKey);
-                      const busyDetails = importedBusyDetailsBySlot[slotKey] ?? [];
-                      const isActiveGoogleBusySlot = activeGoogleBusySlotKey === slotKey && busyDetails.length > 0;
+                  <div
+                    className="grid grid-cols-[52px_repeat(var(--day-count),minmax(0,1fr))] gap-x-1.5 gap-y-2 pt-2"
+                    onPointerMove={handlePointerMove}
+                    style={{'--day-count': mobileVisibleDateCount} as CSSProperties}
+                  >
+                    <div aria-hidden="true" />
+                    {mobileVisibleDates.map((date, dateOffset) => {
+                      const label = formatDateHeader(date);
+                      const dateIndex = mobilePageRange.startIndex + dateOffset;
+                      const isActiveDate = activeMobileDateIndex === dateIndex;
 
                       return (
-                        <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-2" key={slotKey}>
-                          <div className="flex h-11 items-center justify-end pr-2 text-[10px] font-medium text-ink-soft">
+                        <button
+                          aria-label={`Focus ${formatDateLabel(date)}`}
+                          aria-pressed={isActiveDate}
+                          className={cn(
+                            'flex h-12 flex-col items-center justify-center rounded-xl border px-1 text-center transition-colors duration-150',
+                            isActiveDate ? 'border-primary bg-primary text-white' : 'border-line bg-white text-ink hover:border-primary/20',
+                          )}
+                          key={`mobile-date-${date}`}
+                          onClick={() => setActiveMobileDateIndex(dateIndex)}
+                          type="button"
+                        >
+                          <span className={cn('text-[10px] font-semibold uppercase tracking-[0.16em]', isActiveDate ? 'text-white/80' : 'text-ink-soft')}>
+                            {label.weekday}
+                          </span>
+                          <span className="mt-1 font-headline text-base font-bold leading-none">{label.day}</span>
+                        </button>
+                      );
+                    })}
+
+                    {timeRows.map((time) => {
+                      return (
+                        <Fragment key={`mobile-row-${time}`}>
+                          <div className="flex h-11 items-center justify-end pr-1 text-[10px] font-medium text-ink-soft">
                             {formatTimeLabel(time).replace(':00', '')}
                           </div>
 
-                          <button
-                            aria-pressed={isSelected}
-                            className={cn(
-                              'relative h-11 w-full touch-none rounded-[18px] border transition-all duration-100',
-                              isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft',
-                              isImportedBusy && !isSelected ? 'border-danger/20 bg-danger/5' : '',
-                              isImportedBusy && isSelected ? 'border-primary shadow-[inset_0_0_0_2px_rgba(252,165,165,0.55)]' : '',
-                              isActiveGoogleBusySlot ? 'ring-2 ring-slate-900/15' : '',
-                            )}
-                            data-slot-key={slotKey}
-                            onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer)}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                            onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
-                            style={
-                              isImportedBusy && !isSelected
-                                ? ({
-                                    backgroundImage:
-                                      'linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0, rgba(220, 38, 38, 0.08) 6px, rgba(255, 255, 255, 0) 6px, rgba(255, 255, 255, 0) 12px)',
-                                  } as CSSProperties)
-                                : undefined
-                            }
-                            title={isImportedBusy && busyDetails.length === 0 ? 'Google Calendar marked this slot busy. You can still override it manually.' : undefined}
-                            type="button"
-                          />
-                        </div>
+                          {mobileVisibleDates.map((date, dateOffset) => {
+                            const slotKey = `${date}T${time}`;
+                            const dateIndex = mobilePageRange.startIndex + dateOffset;
+                            const isSelected = selectedSlots.has(slotKey);
+                            const isImportedBusy = importedBusySlots.has(slotKey);
+                            const busyDetails = importedBusyDetailsBySlot[slotKey] ?? [];
+                            const isActiveGoogleBusySlot = activeGoogleBusySlotKey === slotKey && busyDetails.length > 0;
+
+                            return (
+                              <button
+                                aria-pressed={isSelected}
+                                className={cn(
+                                  'relative h-11 w-full touch-none rounded-[16px] border transition-all duration-100',
+                                  isSelected ? 'border-white bg-primary text-white' : 'border-white bg-surface-soft',
+                                  isImportedBusy && !isSelected ? 'border-danger/20 bg-danger/5' : '',
+                                  isImportedBusy && isSelected ? 'border-primary shadow-[inset_0_0_0_2px_rgba(252,165,165,0.55)]' : '',
+                                  isActiveGoogleBusySlot ? 'ring-2 ring-slate-900/15' : '',
+                                )}
+                                data-slot-key={slotKey}
+                                key={slotKey}
+                                onPointerDown={(eventPointer) => handlePointerDown(slotKey, eventPointer, dateIndex)}
+                                onPointerMove={handlePointerMove}
+                                onPointerUp={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                onPointerCancel={(eventPointer) => finishDrag(eventPointer.pointerId, eventPointer.currentTarget)}
+                                style={
+                                  isImportedBusy && !isSelected
+                                    ? ({
+                                        backgroundImage:
+                                          'linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0, rgba(220, 38, 38, 0.08) 6px, rgba(255, 255, 255, 0) 6px, rgba(255, 255, 255, 0) 12px)',
+                                      } as CSSProperties)
+                                    : undefined
+                                }
+                                title={isImportedBusy && busyDetails.length === 0 ? 'Google Calendar marked this slot busy. You can still override it manually.' : undefined}
+                                type="button"
+                              />
+                            );
+                          })}
+                        </Fragment>
                       );
                     })}
                   </div>
