@@ -311,7 +311,7 @@ export default function CreateEventForm() {
             <label className="block">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
                 <CalendarRange className="h-4 w-4 text-primary" />
-                Start date
+                Earliest possible date
               </span>
               <input
                 type="date"
@@ -333,7 +333,7 @@ export default function CreateEventForm() {
             <label className="block">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
                 <CalendarRange className="h-4 w-4 text-primary" />
-                End date
+                Latest possible date
               </span>
               <input
                 type="date"
