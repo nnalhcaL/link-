@@ -77,6 +77,12 @@ function extractCookiePair(response) {
   return setCookieHeader.split(';')[0];
 }
 
+function buildConsecutiveDates(startDate, count) {
+  const start = new Date(`${startDate}T00:00:00Z`).getTime();
+
+  return Array.from({length: count}, (_, index) => new Date(start + index * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+}
+
 before(async () => {
   devServer = spawn('npm', ['run', 'dev'], {
     cwd: process.cwd(),
@@ -171,6 +177,45 @@ test('creates an event with a structured location', async () => {
   assert.equal(event.locationLongitude, payload.location.longitude);
   assert.ok(event.hostAccessSecretHash, 'Expected host access hash to be persisted.');
   assert.ok(event.hostAccessCreatedAt, 'Expected host access timestamp to be persisted.');
+});
+
+test('creates an event with more than fourteen dates up to the sixty date limit', async () => {
+  const payload = {
+    title: 'Smoke test sixty dates',
+    description: '',
+    dates: buildConsecutiveDates('2026-05-01', 60),
+    timeRangeStart: '09:00',
+    timeRangeEnd: '17:00',
+    timezone: 'Australia/Sydney',
+  };
+
+  const {response, body} = await createEvent(payload);
+
+  assert.equal(response.status, 201, `Expected 201 but received ${response.status}: ${JSON.stringify(body)}`);
+  assert.ok(body?.id, 'Expected event id in response body.');
+
+  createdEventIds.add(body.id);
+
+  const event = await prisma.event.findUnique({where: {id: body.id}});
+
+  assert.ok(event, 'Expected event row to be persisted.');
+  assert.deepEqual(JSON.parse(event.dates), payload.dates);
+});
+
+test('rejects an event with more than sixty dates', async () => {
+  const payload = {
+    title: 'Smoke test too many dates',
+    description: '',
+    dates: buildConsecutiveDates('2026-07-01', 61),
+    timeRangeStart: '09:00',
+    timeRangeEnd: '17:00',
+    timezone: 'Australia/Sydney',
+  };
+
+  const {response, body} = await createEvent(payload);
+
+  assert.equal(response.status, 400, `Expected 400 but received ${response.status}: ${JSON.stringify(body)}`);
+  assert.equal(body?.fieldErrors?.dates, 'Choose up to 60 dates for this link.');
 });
 
 test('requires the host cookie to update the event location', async () => {

@@ -5,9 +5,10 @@ import {Check, Copy, Link2} from 'lucide-react';
 
 interface ShareLinkBoxProps {
   eventId: string;
+  variant?: 'card' | 'compact';
 }
 
-export default function ShareLinkBox({eventId}: ShareLinkBoxProps) {
+export default function ShareLinkBox({eventId, variant = 'card'}: ShareLinkBoxProps) {
   const [fullUrl, setFullUrl] = useState(`/event/${eventId}`);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
@@ -47,6 +48,24 @@ export default function ShareLinkBox({eventId}: ShareLinkBoxProps) {
     } catch {
       setCopyState('error');
     }
+  }
+
+  if (variant === 'compact') {
+    return (
+      <div className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-surface-soft px-3 py-2">
+        <Link2 className="h-4 w-4 shrink-0 text-primary" />
+        <p className="hidden max-w-[220px] truncate text-sm text-ink-soft md:block">{fullUrl}</p>
+        <button
+          aria-label="Copy event link"
+          className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-line bg-white px-2.5 text-sm font-semibold text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary"
+          onClick={handleCopy}
+          type="button"
+        >
+          {copyState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          <span>{copyState === 'copied' ? 'Copied' : 'Share'}</span>
+        </button>
+      </div>
+    );
   }
 
   return (

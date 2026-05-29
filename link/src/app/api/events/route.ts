@@ -5,7 +5,7 @@ import {Prisma} from '@prisma/client';
 import {createEventHostSecret, hashEventHostSecret, setEventHostCookie} from '@/lib/host-access';
 import {prisma} from '@/lib/prisma';
 import type {ApiErrorResponse, ApiFieldErrors, CreateEventRequest, CreateEventResponse} from '@/lib/types';
-import {isValidEndTimeValue, isValidTimeValue, isValidTimezone, normalizeDateValues, timeToMinutes} from '@/lib/utils';
+import {isValidEndTimeValue, isValidTimeValue, isValidTimezone, MAX_EVENT_DATES, normalizeDateValues, timeToMinutes} from '@/lib/utils';
 
 type IncomingCreateEventRequest = Omit<CreateEventRequest, 'location'> & {
   location?: CreateEventRequest['location'] | string;
@@ -240,8 +240,8 @@ export async function POST(request: NextRequest) {
 
   if (dates.length === 0) {
     fieldErrors.dates = 'Pick at least one date.';
-  } else if (dates.length > 14) {
-    fieldErrors.dates = 'Choose up to 14 dates for this link.';
+  } else if (dates.length > MAX_EVENT_DATES) {
+    fieldErrors.dates = `Choose up to ${MAX_EVENT_DATES} dates for this link.`;
   }
 
   if (!isValidTimeValue(body.timeRangeStart)) {

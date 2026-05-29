@@ -1,8 +1,8 @@
 'use client';
 
-import {type FormEvent, type KeyboardEvent, useEffect, useState} from 'react';
+import {type FormEvent, type KeyboardEvent, useEffect, useMemo, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {CalendarRange, Check, Clock3, LoaderCircle, MapPin, PencilLine, Search, Sparkles, X} from 'lucide-react';
+import {CalendarRange, Check, ChevronLeft, ChevronRight, Clock3, LoaderCircle, MapPin, PencilLine, Search, Sparkles, X} from 'lucide-react';
 import {motion} from 'motion/react';
 
 import type {
@@ -14,9 +14,22 @@ import type {
   LocationSearchCandidate,
   LocationSearchResponse,
 } from '@/lib/types';
-import {cn, END_TIME_OPTIONS, formatTimeLabel, isValidEndTimeValue, isValidTimeValue, timeToMinutes, TIME_OPTIONS} from '@/lib/utils';
+import {
+  buildCalendarMonth,
+  cn,
+  END_TIME_OPTIONS,
+  formatDateLabel,
+  formatTimeLabel,
+  isValidEndTimeValue,
+  isValidTimeValue,
+  MAX_EVENT_DATES,
+  normalizeDateValues,
+  timeToMinutes,
+  TIME_OPTIONS,
+} from '@/lib/utils';
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
+type DateMode = 'range' | 'selected';
 
 export default function CreateEventForm() {
   const router = useRouter();
@@ -31,8 +44,14 @@ export default function CreateEventForm() {
   const [timezone, setTimezone] = useState('America/New_York');
   const [timeRangeStart, setTimeRangeStart] = useState('09:00');
   const [timeRangeEnd, setTimeRangeEnd] = useState('17:00');
+  const [dateMode, setDateMode] = useState<DateMode>('range');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [calendarMonthCursor, setCalendarMonthCursor] = useState(() => {
+    const today = new Date();
+    return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  });
   const [fieldErrors, setFieldErrors] = useState<ApiFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -48,7 +67,15 @@ export default function CreateEventForm() {
     }
   }, []);
 
-  const computedDates = startDate && endDate ? getDatesInRange(startDate, endDate) : [];
+  const rangeDates = startDate && endDate ? getDatesInRange(startDate, endDate) : [];
+  const selectedDateList = useMemo(() => normalizeDateValues([...selectedDates]), [selectedDates]);
+  const visibleCalendarMonths = useMemo(
+    () => [
+      buildCalendarMonth(calendarMonthCursor),
+      buildCalendarMonth(new Date(Date.UTC(calendarMonthCursor.getUTCFullYear(), calendarMonthCursor.getUTCMonth() + 1, 1))),
+    ],
+    [calendarMonthCursor],
+  );
 
   function getDatesInRange(start: string, end: string) {
     const startParts = start.split('-').map(Number);
@@ -74,6 +101,41 @@ export default function CreateEventForm() {
     }
 
     return dates;
+  }
+
+  function changeDateMode(nextMode: DateMode) {
+    setDateMode(nextMode);
+    setFieldErrors((current) => ({...current, dates: undefined}));
+  }
+
+  function shiftCalendarMonths(direction: 'previous' | 'next') {
+    setCalendarMonthCursor((current) => {
+      const offset = direction === 'previous' ? -1 : 1;
+      return new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1));
+    });
+  }
+
+  function toggleSelectedDate(date: string) {
+    setFieldErrors((current) => ({...current, dates: undefined}));
+    setSelectedDates((current) => {
+      const next = new Set(current);
+
+      if (next.has(date)) {
+        next.delete(date);
+        return next;
+      }
+
+      if (next.size >= MAX_EVENT_DATES) {
+        setFieldErrors((currentErrors) => ({
+          ...currentErrors,
+          dates: `Choose up to ${MAX_EVENT_DATES} dates.`,
+        }));
+        return next;
+      }
+
+      next.add(date);
+      return next;
+    });
   }
 
   async function handleLocationSearch() {
@@ -168,20 +230,20 @@ export default function CreateEventForm() {
       nextErrors.title = 'Give your link a title.';
     }
 
-    if (!startDate) {
+    if (dateMode === 'range' && !startDate) {
       nextErrors.dates = 'Pick a start date.';
     }
 
-    if (!endDate) {
+    if (dateMode === 'range' && !endDate) {
       nextErrors.dates = 'Pick an end date.';
     }
 
-    const computedDates = startDate && endDate ? getDatesInRange(startDate, endDate) : [];
+    const submitDates = dateMode === 'range' ? (startDate && endDate ? getDatesInRange(startDate, endDate) : []) : selectedDateList;
 
-    if (computedDates.length === 0) {
-      nextErrors.dates = 'Pick a valid date range.';
-    } else if (computedDates.length > 14) {
-      nextErrors.dates = 'Choose a date range up to 14 days.';
+    if (submitDates.length === 0) {
+      nextErrors.dates = dateMode === 'range' ? 'Pick a valid date range.' : 'Select at least one date.';
+    } else if (submitDates.length > MAX_EVENT_DATES) {
+      nextErrors.dates = `Choose up to ${MAX_EVENT_DATES} dates.`;
     }
 
     if (!isValidTimeValue(timeRangeStart)) {
@@ -215,7 +277,7 @@ export default function CreateEventForm() {
     const payload: CreateEventRequest = {
       title: title.trim(),
       description: description.trim(),
-      dates: computedDates,
+      dates: submitDates,
       timeRangeStart,
       timeRangeEnd,
       timezone,
@@ -307,51 +369,154 @@ export default function CreateEventForm() {
         </label>
 
         <div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <CalendarRange className="h-4 w-4 text-primary" />
-                Earliest possible date
-              </span>
-              <input
-                type="date"
-                className={cn(
-                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
-                  fieldErrors.dates
-                    ? 'border-danger'
-                    : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
-                )}
-                max={endDate || undefined}
-                value={startDate}
-                onChange={(event) => {
-                  setFieldErrors((current) => ({...current, dates: undefined}));
-                  setStartDate(event.target.value);
-                }}
-              />
-            </label>
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <CalendarRange className="h-4 w-4 text-primary" />
+              Dates
+            </span>
+            <div className="grid rounded-xl border border-line bg-surface-soft p-1 sm:grid-cols-2">
+              {[
+                {label: 'Date range', value: 'range' as const},
+                {label: 'Select dates', value: 'selected' as const},
+              ].map((option) => {
+                const isActive = dateMode === option.value;
 
-            <label className="block">
-              <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <CalendarRange className="h-4 w-4 text-primary" />
-                Latest possible date
-              </span>
-              <input
-                type="date"
-                className={cn(
-                  'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
-                  fieldErrors.dates
-                    ? 'border-danger'
-                    : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
-                )}
-                min={startDate || undefined}
-                value={endDate}
-                onChange={(event) => {
-                  setFieldErrors((current) => ({...current, dates: undefined}));
-                  setEndDate(event.target.value);
-                }}
-              />
-            </label>
+                return (
+                  <button
+                    aria-pressed={isActive}
+                    className={cn(
+                      'rounded-lg px-3 py-2 text-sm font-semibold transition-colors duration-150',
+                      isActive ? 'bg-white text-primary shadow-sm' : 'text-ink-soft hover:text-ink',
+                    )}
+                    key={option.value}
+                    onClick={() => changeDateMode(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {dateMode === 'range' ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-ink">Earliest possible date</span>
+                <input
+                  type="date"
+                  className={cn(
+                    'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                    fieldErrors.dates
+                      ? 'border-danger'
+                      : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
+                  )}
+                  max={endDate || undefined}
+                  value={startDate}
+                  onChange={(event) => {
+                    setFieldErrors((current) => ({...current, dates: undefined}));
+                    setStartDate(event.target.value);
+                  }}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-ink">Latest possible date</span>
+                <input
+                  type="date"
+                  className={cn(
+                    'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                    fieldErrors.dates
+                      ? 'border-danger'
+                      : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
+                  )}
+                  min={startDate || undefined}
+                  value={endDate}
+                  onChange={(event) => {
+                    setFieldErrors((current) => ({...current, dates: undefined}));
+                    setEndDate(event.target.value);
+                  }}
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-line bg-surface-soft p-3 sm:p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <button
+                  aria-label="Show previous months"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+                  onClick={() => shiftCalendarMonths('previous')}
+                  type="button"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <p className="text-center text-sm font-semibold text-ink">
+                  {selectedDateList.length} of {MAX_EVENT_DATES} dates selected
+                </p>
+                <button
+                  aria-label="Show next months"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+                  onClick={() => shiftCalendarMonths('next')}
+                  type="button"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {visibleCalendarMonths.map((month) => (
+                  <div className="rounded-xl bg-white p-3" key={`${month.year}-${month.month}`}>
+                    <p className="text-center text-sm font-semibold text-ink">{month.label}</p>
+                    <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-ink-soft">
+                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((weekday, index) => (
+                        <div key={`${month.year}-${month.month}-${weekday}-${index}`}>{weekday}</div>
+                      ))}
+                    </div>
+                    <div className="mt-1 grid grid-cols-7 gap-1">
+                      {month.weeks.flatMap((week, weekIndex) =>
+                        week.map((day, dayIndex) => {
+                          if (!day) {
+                            return <div aria-hidden="true" className="aspect-square" key={`${month.year}-${month.month}-blank-${weekIndex}-${dayIndex}`} />;
+                          }
+
+                          const isSelected = selectedDates.has(day.date);
+
+                          return (
+                            <button
+                              aria-pressed={isSelected}
+                              className={cn(
+                                'aspect-square rounded-lg text-sm font-semibold transition-colors duration-150',
+                                isSelected
+                                  ? 'bg-primary text-white'
+                                  : 'bg-surface-soft text-ink hover:bg-primary/10 hover:text-primary',
+                              )}
+                              key={day.date}
+                              onClick={() => toggleSelectedDate(day.date)}
+                              title={formatDateLabel(day.date)}
+                              type="button"
+                            >
+                              {day.dayNumber}
+                            </button>
+                          );
+                        }),
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {selectedDateList.length > 0 ? (
+                <p className="mt-3 text-sm leading-6 text-ink-soft">
+                  {selectedDateList.slice(0, 6).map(formatDateLabel).join(', ')}
+                  {selectedDateList.length > 6 ? `, +${selectedDateList.length - 6} more` : ''}
+                </p>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-ink-soft">Pick any individual dates that could work.</p>
+              )}
+            </div>
+          )}
+
+          <p className="mt-2 text-xs leading-5 text-ink-soft">Choose up to {MAX_EVENT_DATES} dates.</p>
           {fieldErrors.dates ? <p className="mt-2 text-sm text-danger">{fieldErrors.dates}</p> : null}
         </div>
 

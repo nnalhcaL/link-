@@ -1,11 +1,9 @@
 'use client';
 
-import {useRouter} from 'next/navigation';
 import {
   type CSSProperties,
   Fragment,
   type FocusEvent as ReactFocusEvent,
-  type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
@@ -13,7 +11,18 @@ import {
   useRef,
   useState,
 } from 'react';
-import {CheckCircle2, ChevronLeft, ChevronRight, Clock3, LoaderCircle, PencilLine, RefreshCw, UserRound} from 'lucide-react';
+import {
+  CheckCircle2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  LoaderCircle,
+  PencilLine,
+  Settings,
+  Sparkles,
+  UserRound,
+} from 'lucide-react';
 
 import {
   buildGoogleCalendarImportProjection,
@@ -35,15 +44,29 @@ import type {
   GoogleCalendarConnectionState,
   GoogleCalendarImportState,
   GoogleCalendarRecord,
+  SlotSummary,
 } from '@/lib/types';
-import {cn, formatDateHeader, formatDateLabel, formatTimeLabel, generateTimeRows, sortAvailability} from '@/lib/utils';
+import {
+  buildSlotSummaries,
+  cn,
+  formatDateHeader,
+  formatDateLabel,
+  formatTimeLabel,
+  generateTimeRows,
+  getHeatmapColor,
+  sortAvailability,
+} from '@/lib/utils';
 
 interface AvailabilityGridProps {
   event: EventRecord;
   participantName: string;
   initialAvailability: string[];
-  onSaveName: (name: string) => void;
+  isManualEntryOpen: boolean;
+  onDirtyChange?: (isDirty: boolean) => void;
+  onOpenManualEntry: () => void;
+  onRequestName: () => void;
   onSubmit: (availability: string[]) => Promise<{ok: boolean; error?: string}>;
+  responseId?: string;
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? '';
@@ -72,10 +95,13 @@ export default function AvailabilityGrid({
   event,
   participantName,
   initialAvailability,
-  onSaveName,
+  isManualEntryOpen,
+  onDirtyChange,
+  onOpenManualEntry,
+  onRequestName,
   onSubmit,
+  responseId,
 }: AvailabilityGridProps) {
-  const router = useRouter();
   const isDevelopment = process.env.NODE_ENV !== 'production';
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set(initialAvailability));
   const [importedBusySlots, setImportedBusySlots] = useState<Set<string>>(new Set());
@@ -85,9 +111,7 @@ export default function AvailabilityGrid({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isEditingName, setIsEditingName] = useState(!participantName);
-  const [nameDraft, setNameDraft] = useState(participantName);
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [hasUnsavedManualChanges, setHasUnsavedManualChanges] = useState(false);
   const [googleConnectionState, setGoogleConnectionState] = useState<GoogleCalendarConnectionState>(
     GOOGLE_CLIENT_ID ? 'connecting' : 'unavailable',
   );
@@ -109,14 +133,33 @@ export default function AvailabilityGrid({
     left: number;
     top: number;
   } | null>(null);
+  const [hoveredHeatmapSlotKey, setHoveredHeatmapSlotKey] = useState<string | null>(null);
+  const [selectedHeatmapSlotKey, setSelectedHeatmapSlotKey] = useState<string | null>(null);
+  const [heatmapTooltip, setHeatmapTooltip] = useState<{
+    slotKey: string;
+    date: string;
+    time: string;
+    left: number;
+    top: number;
+  } | null>(null);
 
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const activePointerIdRef = useRef<number | null>(null);
   const lastPaintedSlotRef = useRef<string | null>(null);
   const googleBusyTooltipHostRef = useRef<HTMLDivElement>(null);
+  const heatmapTooltipHostRef = useRef<HTMLDivElement>(null);
   const timeRows = useMemo(() => generateTimeRows(event.timeRangeStart, event.timeRangeEnd), [event.timeRangeEnd, event.timeRangeStart]);
   const initialSignature = initialAvailability.join('|');
+  const slotSummaries = useMemo(() => buildSlotSummaries(event), [event]);
+  const summaryMap = useMemo(() => new Map(slotSummaries.map((summary) => [summary.slotKey, summary])), [slotSummaries]);
+  const totalParticipants = event.responses.length;
+  const activeSummary =
+    summaryMap.get(hoveredHeatmapSlotKey ?? '') ??
+    summaryMap.get(selectedHeatmapSlotKey ?? '') ??
+    slotSummaries.find((summary) => summary.count > 0) ??
+    null;
+  const tooltipSummary = heatmapTooltip ? summaryMap.get(heatmapTooltip.slotKey) ?? null : null;
   const gridMinWidth = Math.max(264, event.dates.length * 88);
+  const heatmapGridMinWidth = Math.max(320, 72 + event.dates.length * 92);
   const mobilePageRange = useMemo(
     () => getMobileDatePageRange(activeMobileDateIndex, mobileVisibleDayCount, event.dates.length),
     [activeMobileDateIndex, event.dates.length, mobileVisibleDayCount],
@@ -134,7 +177,6 @@ export default function AvailabilityGrid({
     [googleConnectionState, importedBusySlots, lastImportedAt, selectedGoogleCalendarIds],
   );
   const hasImportedGoogleBusyHints = googleImportState.importedBusySlotKeys.length > 0;
-  const isGoogleReady = googleConnectionState === 'ready' || googleConnectionState === 'connected';
   const isGoogleConnected = googleConnectionState === 'connected';
   const isGoogleUnavailable = googleConnectionState === 'unavailable';
   const activeGoogleBusyDetails = activeGoogleBusySlotKey ? importedBusyDetailsBySlot[activeGoogleBusySlotKey] ?? [] : [];
@@ -186,6 +228,10 @@ export default function AvailabilityGrid({
   const mobileInspectorDetails = activeMobileSlotKey ? importedBusyDetailsBySlot[activeMobileSlotKey] ?? [] : activeMobileDayBusyDetails;
 
   useEffect(() => {
+    if (hasUnsavedManualChanges || isManualEntryOpen) {
+      return;
+    }
+
     setSelectedSlots(new Set(initialAvailability));
     setImportedBusySlots(new Set());
     setImportedBusyDetailsBySlot({});
@@ -195,7 +241,11 @@ export default function AvailabilityGrid({
     setLastImportedAt(null);
     setStatusMessage(null);
     setErrorMessage(null);
-  }, [participantName, initialSignature, initialAvailability]);
+  }, [hasUnsavedManualChanges, isManualEntryOpen, participantName, initialSignature, initialAvailability]);
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedManualChanges);
+  }, [hasUnsavedManualChanges, onDirtyChange]);
 
   useEffect(() => {
     setActiveMobileDateIndex(0);
@@ -238,12 +288,6 @@ export default function AvailabilityGrid({
   }, [activeMobileDate]);
 
   useEffect(() => {
-    setNameDraft(participantName);
-    setNameError(null);
-    setIsEditingName(!participantName);
-  }, [participantName]);
-
-  useEffect(() => {
     function resetDragState() {
       setIsDragging(false);
       activePointerIdRef.current = null;
@@ -258,14 +302,6 @@ export default function AvailabilityGrid({
       window.removeEventListener('pointercancel', resetDragState);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isEditingName) {
-      return;
-    }
-
-    nameInputRef.current?.focus();
-  }, [isEditingName]);
 
   useEffect(() => {
     setSelectedGoogleCalendarIds(new Set(getStoredSelectedCalendarIds(event.id)));
@@ -319,6 +355,7 @@ export default function AvailabilityGrid({
     }
 
     lastPaintedSlotRef.current = slotKey;
+    setHasUnsavedManualChanges(true);
     setSelectedSlots((current) => {
       const next = new Set(current);
 
@@ -342,18 +379,13 @@ export default function AvailabilityGrid({
     lastPaintedSlotRef.current = null;
   }
 
-  function openNameEditor() {
-    setIsEditingName(true);
-    setNameError(null);
-  }
-
   function requireNameBeforeGoogleImport() {
     if (participantName) {
       return true;
     }
 
-    setNameError('Enter your name before importing from Google Calendar.');
-    openNameEditor();
+    setGoogleErrorMessage('Enter your name before importing from Google Calendar.');
+    onRequestName();
     return false;
   }
 
@@ -593,6 +625,8 @@ export default function AvailabilityGrid({
       setHoveredGoogleBusySlotKey(null);
       setGoogleBusyTooltip(null);
       setSelectedSlots(new Set(importProjection.freeSlotKeys));
+      setHasUnsavedManualChanges(true);
+      onOpenManualEntry();
       setLastImportedAt(new Date().toISOString());
       setErrorMessage(null);
       setStatusMessage(null);
@@ -610,31 +644,9 @@ export default function AvailabilityGrid({
     }
   }
 
-  function saveName() {
-    const trimmedName = nameDraft.trim();
-
-    if (!trimmedName) {
-      setNameError('Enter your name before you choose availability.');
-      return;
-    }
-
-    setNameError(null);
-    onSaveName(trimmedName);
-    setIsEditingName(false);
-  }
-
-  function handleNameKeyDown(eventKey: KeyboardEvent<HTMLInputElement>) {
-    if (eventKey.key !== 'Enter') {
-      return;
-    }
-
-    eventKey.preventDefault();
-    saveName();
-  }
-
   function handlePointerDown(slotKey: string, eventPointer: ReactPointerEvent<HTMLButtonElement>, mobileDateIndex?: number) {
     if (!participantName) {
-      openNameEditor();
+      onRequestName();
       return;
     }
 
@@ -695,7 +707,7 @@ export default function AvailabilityGrid({
 
   async function handleSubmit() {
     if (!participantName) {
-      openNameEditor();
+      onRequestName();
       return;
     }
 
@@ -705,17 +717,58 @@ export default function AvailabilityGrid({
     setIsSubmitting(false);
 
     if (result.ok) {
-      setStatusMessage('Availability saved. Opening group view...');
+      setHasUnsavedManualChanges(false);
+      setStatusMessage('Availability saved.');
       return;
     }
 
     setErrorMessage(result.error ?? 'We could not save your availability.');
   }
 
-  function handleContinueToGroupView() {
-    setStatusMessage(null);
-    setErrorMessage(null);
-    router.push(`/event/${event.id}/group`);
+  function handlePrimaryAction() {
+    if (isManualEntryOpen) {
+      void handleSubmit();
+      return;
+    }
+
+    if (!participantName) {
+      onRequestName();
+      return;
+    }
+
+    onOpenManualEntry();
+  }
+
+  function showHeatmapTooltip(
+    summary: SlotSummary,
+    target: HTMLElement,
+  ) {
+    if (!heatmapTooltipHostRef.current) {
+      return;
+    }
+
+    const hostRect = heatmapTooltipHostRef.current.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const estimatedTooltipWidth = 240;
+    const minLeft = estimatedTooltipWidth / 2 + 12;
+    const maxLeft = Math.max(minLeft, hostRect.width - estimatedTooltipWidth / 2 - 12);
+    const unclampedLeft = targetRect.left + targetRect.width / 2 - hostRect.left;
+    const left = Math.min(Math.max(unclampedLeft, minLeft), maxLeft);
+    const top = Math.max(targetRect.top - hostRect.top - 12, 16);
+
+    setHoveredHeatmapSlotKey(summary.slotKey);
+    setHeatmapTooltip({
+      slotKey: summary.slotKey,
+      date: summary.date,
+      time: summary.time,
+      left,
+      top,
+    });
+  }
+
+  function hideHeatmapTooltip(slotKey: string) {
+    setHoveredHeatmapSlotKey((current) => (current === slotKey ? null : current));
+    setHeatmapTooltip((current) => (current?.slotKey === slotKey ? null : current));
   }
 
   function handleGoogleBusyMouseEnter(
@@ -767,236 +820,211 @@ export default function AvailabilityGrid({
   }
 
   return (
-    <section className="space-y-4 sm:space-y-6">
-      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
-        {isEditingName ? (
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-xl">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold text-ink">Your name</p>
-                <span className="rounded-md bg-danger/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-danger">
-                  Required
-                </span>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-ink-soft">
-                Enter your name before you choose any availability so we can save your response correctly.
-              </p>
-            </div>
-
-            <div className="w-full lg:max-w-[520px]">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] bg-surface-soft px-4 py-3.5 sm:rounded-[24px] sm:px-5 sm:py-4">
-                  <input
-                    ref={nameInputRef}
-                    className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-soft/75"
-                    onChange={(eventInput) => setNameDraft(eventInput.target.value)}
-                    onKeyDown={handleNameKeyDown}
-                    placeholder="e.g. Alex Rivera"
-                    value={nameDraft}
-                  />
-                  <UserRound className="h-5 w-5 text-ink-soft" />
-                </div>
-
-                <button
-                  className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] sm:w-auto"
-                  onClick={saveName}
-                  type="button"
-                >
-                  {participantName ? 'Save name' : 'Enter name first'}
-                </button>
-              </div>
-
-              {nameError ? <p className="mt-3 text-sm text-danger">{nameError}</p> : null}
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+    <section>
+      <div className="panel-border rounded-[24px] bg-white p-5 pb-6 shadow-soft sm:rounded-[28px] sm:p-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-3">
+            <div className="flex items-start gap-3">
               <div className="rounded-xl bg-primary/10 p-2.5 text-primary">
-                <UserRound className="h-4 w-4" />
+                {isManualEntryOpen ? <PencilLine className="h-5 w-5" /> : <Settings className="h-5 w-5" />}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-ink">Your name</p>
-                <p className="mt-1 text-sm text-ink-soft">{participantName}</p>
+              <div className="min-w-0">
+                <h2 className="font-headline text-xl font-bold tracking-tight text-ink">
+                  {isManualEntryOpen ? 'Your availability' : 'Group availability'}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-ink-soft">
+                  {isManualEntryOpen
+                    ? 'Tap or drag across the grid to choose the times that work for you.'
+                    : 'Darker slots mean more people are available. Tap a slot to see who can make it.'}
+                </p>
               </div>
             </div>
 
-            <button
-              className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface-soft px-4 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:border-primary/20 hover:text-ink"
-              onClick={openNameEditor}
-              type="button"
-            >
-              <PencilLine className="h-4 w-4" />
-              Edit name
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="panel-border rounded-[24px] bg-white p-4 shadow-soft sm:rounded-[28px] sm:p-5">
-        <div className="space-y-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-4 text-sm text-ink-soft sm:gap-5">
-                <div className="flex items-center gap-2">
-                  <span className="h-3.5 w-3.5 rounded-sm bg-primary" />
-                  Selected
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-3.5 w-3.5 rounded-sm bg-surface-strong" />
-                  Unselected
-                </div>
-                {hasImportedGoogleBusyHints ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-soft">
+              {isManualEntryOpen ? (
+                <>
                   <div className="flex items-center gap-2">
-                    <span className="h-3.5 w-3.5 rounded-sm border border-danger/25 bg-danger/10" />
-                    Google busy
+                    <span className="h-3 w-3 rounded-sm bg-primary" />
+                    Selected
                   </div>
-                ) : null}
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-primary" />
-                  {event.timezone}
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm bg-surface-strong" />
+                    Unselected
+                  </div>
+                  {hasImportedGoogleBusyHints ? (
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-sm border border-danger/25 bg-danger/10" />
+                      Google busy
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-ink-soft">
+                  <span>Low</span>
+                  <span className="h-3 w-3 rounded-sm bg-[#ebe4ff]" />
+                  <span className="h-3 w-3 rounded-sm bg-[#d7cafb]" />
+                  <span className="h-3 w-3 rounded-sm bg-[#a38be4]" />
+                  <span className="h-3 w-3 rounded-sm bg-primary" />
+                  <span>All available</span>
                 </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-primary" />
+                {event.timezone}
               </div>
-              <p className="text-sm text-ink-soft">Tap once or drag across the grid to paint your availability.</p>
             </div>
+          </div>
 
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex w-full flex-col gap-3 lg:w-auto lg:min-w-[300px] lg:items-end">
+            {participantName ? (
               <button
-                className="w-full rounded-xl px-4 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:bg-surface-soft hover:text-ink sm:w-auto"
-                onClick={() => setSelectedSlots(new Set())}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-line bg-surface-soft px-3.5 py-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-primary/20 hover:text-primary sm:w-auto lg:max-w-[300px]"
+                onClick={onRequestName}
+                type="button"
+              >
+                <UserRound className="h-4 w-4" />
+                <span className="truncate">{participantName}</span>
+              </button>
+            ) : null}
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:justify-end">
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-primary/20 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={googleConnectionState === 'connecting' || isImportingGoogle || isGoogleUnavailable}
+                onClick={() => void authorizeGoogleCalendar(true)}
+                type="button"
+              >
+                {googleConnectionState === 'connecting' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+                {googleConnectionState === 'connecting'
+                  ? 'Connecting...'
+                  : isGoogleConnected
+                    ? 'Reconnect Google'
+                    : isGoogleUnavailable
+                      ? 'Google unavailable'
+                      : 'Connect Google Calendar'}
+              </button>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting}
+                onClick={handlePrimaryAction}
+                type="button"
+              >
+                {isManualEntryOpen && isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
+                {isManualEntryOpen
+                  ? isSubmitting
+                    ? 'Saving availability...'
+                    : 'Save availability'
+                  : responseId
+                    ? 'Edit availability'
+                    : 'Manual input'}
+              </button>
+            </div>
+            {isManualEntryOpen ? (
+              <button
+                className="w-full rounded-xl px-3.5 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:bg-surface-soft hover:text-ink sm:w-auto"
+                onClick={() => {
+                  setSelectedSlots(new Set());
+                  setHasUnsavedManualChanges(true);
+                }}
                 type="button"
               >
                 Clear all
               </button>
-            </div>
-          </div>
-
-          <div className="rounded-[20px] border border-line bg-surface-soft px-4 py-4 sm:rounded-[24px]">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <div>
-                  <p className="text-sm font-semibold text-ink">Google Calendar</p>
-                  <p className="mt-1 text-sm leading-6 text-ink-soft">Import your busy time, then fine-tune any slot manually.</p>
-                </div>
-                {googleImportState.lastImportedAt ? (
-                  <p className="text-xs text-ink-soft">Last imported {formatGoogleImportTimestamp(googleImportState.lastImportedAt)}</p>
-                ) : null}
-              </div>
-
-              {isGoogleUnavailable ? (
-                <div className="max-w-md rounded-[18px] border border-line bg-white px-4 py-3">
-                  <p className="text-sm font-medium text-ink">Google Calendar import is unavailable here.</p>
-                  <p className="mt-1 text-sm leading-6 text-ink-soft">
-                    {!GOOGLE_CLIENT_ID
-                      ? 'Add NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable it in this environment.'
-                      : 'The Google Calendar tools could not load right now.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-stretch gap-2 sm:flex-row">
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:border-primary/20 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={googleConnectionState === 'connecting' || isImportingGoogle}
-                    onClick={() => void authorizeGoogleCalendar(true)}
-                    type="button"
-                  >
-                    {googleConnectionState === 'connecting' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    {googleConnectionState === 'connecting'
-                      ? 'Connecting...'
-                      : isGoogleConnected
-                        ? 'Reconnect Google'
-                        : 'Connect Google Calendar'}
-                  </button>
-
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!isGoogleConnected || selectedGoogleCalendarIds.size === 0 || isImportingGoogle}
-                    onClick={() => void handleGoogleImport()}
-                    type="button"
-                  >
-                    {isImportingGoogle ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {isImportingGoogle ? 'Importing...' : 'Import from Google'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {isGoogleReady && googleCalendars.length > 0 ? (
-              <div className="mt-4 border-t border-line pt-4">
-                <p className="text-sm font-medium text-ink">Calendars to include</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {googleCalendars.map((calendar) => {
-                    const isSelected = selectedGoogleCalendarIds.has(calendar.id);
-
-                    return (
-                      <label
-                        className={cn(
-                          'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors duration-150',
-                          isSelected ? 'border-primary/25 bg-white' : 'border-line bg-white hover:border-primary/20',
-                        )}
-                        key={calendar.id}
-                      >
-                        <input
-                          checked={isSelected}
-                          className="mt-1 h-4 w-4 rounded border-line text-primary focus:ring-primary/20"
-                          onChange={() => toggleGoogleCalendar(calendar.id)}
-                          type="checkbox"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-ink">
-                            {calendar.summary}
-                            {calendar.primary ? ' (Primary)' : ''}
-                          </p>
-                          {calendar.description ? <p className="mt-1 text-xs leading-5 text-ink-soft">{calendar.description}</p> : null}
-                          {calendar.accessRole === 'freeBusyReader' ? (
-                            <p className="mt-1 text-xs leading-5 text-ink-soft">Busy-only access from Google. Event titles are hidden.</p>
-                          ) : null}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
             ) : null}
-
-            {googleStatusMessage ? <p className="mt-4 text-sm text-success">{googleStatusMessage}</p> : null}
-            {googleErrorMessage ? <p className="mt-4 text-sm text-danger">{googleErrorMessage}</p> : null}
           </div>
         </div>
-      </div>
 
-      <div className="panel-border rounded-[24px] bg-white p-3 pb-6 shadow-soft sm:rounded-[32px] sm:p-6">
-        <div className="relative">
-          <div className="pointer-events-none absolute inset-0 z-[120]" ref={googleBusyTooltipHostRef}>
-            {googleBusyTooltip && tooltipGoogleBusyDetails.length > 0 ? (
-              <div
-                className="absolute hidden w-72 -translate-x-1/2 -translate-y-full rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block"
-                style={{
-                  left: `${googleBusyTooltip.left}px`,
-                  top: `${googleBusyTooltip.top}px`,
-                }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                  {formatDateLabel(googleBusyTooltip.date)} at {formatTimeLabel(googleBusyTooltip.time)}
-                </p>
-                <div className="mt-2 space-y-2">
-                  {tooltipGoogleBusyDetails.slice(0, 3).map((detail) => (
-                    <div key={`${detail.id}:${detail.start}:${detail.end}`}>
-                      <p className="truncate text-sm font-semibold">{detail.title}</p>
-                      <p className="text-xs text-white/70">
-                        {formatBusyDetailRange(detail)}
-                        {' · '}
-                        {detail.calendarSummary}
-                      </p>
-                    </div>
-                  ))}
-                  {tooltipGoogleBusyDetails.length > 3 ? (
-                    <p className="text-xs text-white/70">+{tooltipGoogleBusyDetails.length - 3} more blocking events</p>
-                  ) : null}
-                </div>
+        {isGoogleConnected && googleCalendars.length > 0 ? (
+          <div className="mt-6 border-t border-line pt-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-ink">Calendars to include</p>
+                {googleImportState.lastImportedAt ? (
+                  <p className="mt-1 text-xs text-ink-soft">Last imported {formatGoogleImportTimestamp(googleImportState.lastImportedAt)}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-ink-soft">Choose calendars, then import your free slots.</p>
+                )}
               </div>
-            ) : null}
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={selectedGoogleCalendarIds.size === 0 || isImportingGoogle}
+                onClick={() => void handleGoogleImport()}
+                type="button"
+              >
+                {isImportingGoogle ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isImportingGoogle ? 'Importing...' : 'Import from Google'}
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {googleCalendars.map((calendar) => {
+                const isSelected = selectedGoogleCalendarIds.has(calendar.id);
+
+                return (
+                  <label
+                    className={cn(
+                      'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors duration-150',
+                      isSelected ? 'border-primary/25 bg-surface-soft' : 'border-line bg-white hover:border-primary/20',
+                    )}
+                    key={calendar.id}
+                  >
+                    <input
+                      checked={isSelected}
+                      className="mt-1 h-4 w-4 rounded border-line text-primary focus:ring-primary/20"
+                      onChange={() => toggleGoogleCalendar(calendar.id)}
+                      type="checkbox"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {calendar.summary}
+                        {calendar.primary ? ' (Primary)' : ''}
+                      </p>
+                      {calendar.accessRole === 'freeBusyReader' ? (
+                        <p className="mt-1 text-xs leading-5 text-ink-soft">Busy-only access</p>
+                      ) : null}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
+        ) : null}
+
+        {googleStatusMessage ? <p className="mt-4 text-sm text-success">{googleStatusMessage}</p> : null}
+        {googleErrorMessage ? <p className="mt-4 text-sm text-danger">{googleErrorMessage}</p> : null}
+
+        <div className="mt-7 sm:mt-8">
+      {isManualEntryOpen ? (
+        <>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-0 z-[120]" ref={googleBusyTooltipHostRef}>
+              {googleBusyTooltip && tooltipGoogleBusyDetails.length > 0 ? (
+                <div
+                  className="absolute hidden w-72 -translate-x-1/2 -translate-y-full rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block"
+                  style={{
+                    left: `${googleBusyTooltip.left}px`,
+                    top: `${googleBusyTooltip.top}px`,
+                  }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                    {formatDateLabel(googleBusyTooltip.date)} at {formatTimeLabel(googleBusyTooltip.time)}
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {tooltipGoogleBusyDetails.slice(0, 3).map((detail) => (
+                      <div key={`${detail.id}:${detail.start}:${detail.end}`}>
+                        <p className="truncate text-sm font-semibold">{detail.title}</p>
+                        <p className="text-xs text-white/70">
+                          {formatBusyDetailRange(detail)}
+                          {' · '}
+                          {detail.calendarSummary}
+                        </p>
+                      </div>
+                    ))}
+                    {tooltipGoogleBusyDetails.length > 3 ? (
+                      <p className="text-xs text-white/70">+{tooltipGoogleBusyDetails.length - 3} more blocking events</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
           <div
             className={cn(
@@ -1261,40 +1289,136 @@ export default function AvailabilityGrid({
             <div className="absolute inset-0 flex items-center justify-center px-4">
               <button
                 className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all duration-150 hover:border-primary/30 hover:text-primary"
-                onClick={openNameEditor}
+                onClick={onRequestName}
                 type="button"
               >
                 Enter your name to choose times
               </button>
             </div>
           ) : null}
-        </div>
-      </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-0 z-[120]" ref={heatmapTooltipHostRef}>
+              {heatmapTooltip && tooltipSummary ? (
+                <div
+                  className="absolute hidden w-60 -translate-x-1/2 -translate-y-full rounded-2xl bg-slate-950 px-4 py-3 text-left text-white shadow-2xl sm:block"
+                  style={{
+                    left: `${heatmapTooltip.left}px`,
+                    top: `${heatmapTooltip.top}px`,
+                  }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                    {formatDateLabel(heatmapTooltip.date)} at {formatTimeLabel(heatmapTooltip.time)}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold">
+                    {tooltipSummary.count} of {Math.max(totalParticipants, 1)} available
+                  </p>
+                  <p className="mt-2 text-sm text-white/75">
+                    {tooltipSummary.participantNames.length > 0
+                      ? tooltipSummary.participantNames.join(', ')
+                      : 'Nobody has marked this slot yet.'}
+                  </p>
+                </div>
+              ) : null}
+            </div>
 
-      {statusMessage ? <p className="text-sm text-success">{statusMessage}</p> : null}
-      {errorMessage ? <p className="text-sm text-danger">{errorMessage}</p> : null}
+            <div className="grid-scroll overflow-x-auto pb-1">
+              <div className="pr-3 sm:pr-7" style={{minWidth: `${heatmapGridMinWidth}px`}}>
+                <div
+                  className="grid grid-cols-[72px_repeat(var(--date-count),minmax(92px,1fr))] gap-1.5 sm:grid-cols-[84px_repeat(var(--date-count),minmax(110px,1fr))] sm:gap-2"
+                  style={{'--date-count': event.dates.length} as CSSProperties}
+                >
+                  <div className="sticky-time-cell sticky-time-cell--corner h-12 sm:h-14" />
+                  {event.dates.map((date) => {
+                    const label = formatDateHeader(date);
 
-      <div className="flex flex-col items-start justify-between gap-4 rounded-[24px] bg-tertiary-soft/70 p-4 sm:rounded-[28px] sm:p-5 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-semibold text-tertiary">{selectedSlots.size} slots selected</p>
-          <p className="mt-1 text-sm text-tertiary/80">Submit to save your response, or continue as a viewer to see the group overlap first.</p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-          <button
-            className="w-full rounded-2xl bg-primary px-6 py-3.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            disabled={isSubmitting}
-            onClick={() => void handleSubmit()}
-            type="button"
-          >
-            {isSubmitting ? 'Saving availability…' : "Submit and View Group's Availability"}
-          </button>
-          <button
-            className="w-full rounded-xl border border-line bg-white px-3.5 py-2 text-sm font-medium text-ink-soft transition-colors duration-150 hover:border-primary/20 hover:text-ink sm:w-auto"
-            onClick={handleContinueToGroupView}
-            type="button"
-          >
-            Continue to view group&apos;s availability
-          </button>
+                    return (
+                      <div className="pointer-events-none mb-1 flex flex-col items-center gap-1 text-center" key={date}>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">{label.weekday}</span>
+                        <span className="font-headline text-lg font-bold tracking-tight text-ink sm:text-xl">{label.day}</span>
+                      </div>
+                    );
+                  })}
+
+                  {timeRows.map((time) => (
+                    <div className="contents" key={`heatmap-row-${time}`}>
+                      <div className="sticky-time-cell flex h-11 items-center justify-end pr-2 text-[11px] font-medium text-ink-soft sm:h-12 sm:pr-4 sm:text-xs">
+                        {formatTimeLabel(time)}
+                      </div>
+                      {event.dates.map((date) => {
+                        const slotKey = `${date}T${time}`;
+                        const summary = summaryMap.get(slotKey);
+
+                        if (!summary) {
+                          return <div className="h-11 rounded-[18px] border border-white bg-surface-soft sm:h-12 sm:rounded-2xl" key={slotKey} />;
+                        }
+
+                        const isHovered = hoveredHeatmapSlotKey === slotKey;
+                        const isSelected = selectedHeatmapSlotKey === slotKey;
+
+                        return (
+                          <button
+                            className={cn(
+                              'relative flex h-11 items-center justify-center rounded-[18px] border border-white text-xs font-semibold text-white transition-colors duration-150 sm:h-12 sm:rounded-2xl',
+                              isHovered || isSelected ? 'z-30' : 'z-[1]',
+                            )}
+                            key={slotKey}
+                            onBlur={() => hideHeatmapTooltip(slotKey)}
+                            onClick={() => setSelectedHeatmapSlotKey(slotKey)}
+                            onFocus={(eventFocus: ReactFocusEvent<HTMLButtonElement>) => showHeatmapTooltip(summary, eventFocus.currentTarget)}
+                            onMouseEnter={(eventMouse: ReactMouseEvent<HTMLButtonElement>) => showHeatmapTooltip(summary, eventMouse.currentTarget)}
+                            onMouseLeave={() => hideHeatmapTooltip(slotKey)}
+                            style={{
+                              backgroundColor: getHeatmapColor(summary.count, totalParticipants),
+                              boxShadow: isSelected ? 'inset 0 0 0 2px rgba(255,255,255,0.65)' : undefined,
+                            }}
+                            type="button"
+                          >
+                            {summary.ratio === 1 && totalParticipants > 0 ? <Sparkles className="h-4 w-4" /> : summary.count || ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-line bg-surface-soft px-4 py-3">
+            {activeSummary ? (
+              <>
+                <p className="text-sm font-semibold text-primary">
+                  {formatDateLabel(activeSummary.date)} at {formatTimeLabel(activeSummary.time)}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-ink">
+                  {activeSummary.count} of {Math.max(totalParticipants, 1)} people can make this slot.
+                </p>
+                <p className="mt-3 text-sm leading-6 text-ink-soft">
+                  {activeSummary.participantNames.length > 0
+                    ? activeSummary.participantNames.join(', ')
+                    : 'No one has selected this slot yet.'}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-ink-soft">Once responses arrive, the strongest overlap will show up here.</p>
+            )}
+          </div>
+        </>
+      )}
+
+          {statusMessage ? <p className="mt-4 text-sm text-success">{statusMessage}</p> : null}
+          {errorMessage ? <p className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
+
+          {isManualEntryOpen ? (
+            <div className="mt-4 rounded-xl bg-tertiary-soft/70 p-4">
+              <p className="text-sm font-semibold text-tertiary">{selectedSlots.size} slots selected</p>
+              <p className="mt-1 text-sm text-tertiary/80">Use Save availability above when your selection is ready.</p>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

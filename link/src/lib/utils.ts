@@ -9,6 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export const TIME_OPTIONS = Array.from({length: 24}, (_, index) => minutesToTime(index * 60));
 export const END_TIME_OPTIONS = [...TIME_OPTIONS, '24:00'];
+export const MAX_EVENT_DATES = 60;
 
 export const PARTICIPANT_TONES = [
   'bg-primary/10 text-primary',

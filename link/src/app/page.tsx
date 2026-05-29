@@ -1,3 +1,4 @@
+import {Fragment} from 'react';
 import {CalendarRange, CloudSun, Lock, RefreshCw, Sparkles} from 'lucide-react';
 
 import CreateEventForm from '@/components/CreateEventForm';
@@ -72,8 +73,8 @@ export default function HomePage() {
                 ))}
 
                 {sampleTimes.map((time, rowIndex) => (
-                  <>
-                    <div className="flex items-center text-xs font-medium text-ink-soft" key={`${time}-label`}>
+                  <Fragment key={time}>
+                    <div className="flex items-center text-xs font-medium text-ink-soft">
                       {time}
                     </div>
                     {sampleDays.map((day, columnIndex) => {
@@ -93,7 +94,7 @@ export default function HomePage() {
                         />
                       );
                     })}
-                  </>
+                  </Fragment>
                 ))}
               </div>
 
