@@ -2,7 +2,7 @@
 
 import {type FormEvent, type KeyboardEvent, useEffect, useMemo, useState} from 'react';
 import {useRouter} from 'next/navigation';
-import {CalendarRange, Check, ChevronLeft, ChevronRight, Clock3, LoaderCircle, MapPin, PencilLine, Search, Sparkles, X} from 'lucide-react';
+import {CalendarRange, Check, ChevronLeft, ChevronRight, Clock3, LoaderCircle, MapPin, PencilLine, Search, X} from 'lucide-react';
 import {motion} from 'motion/react';
 
 import type {
@@ -334,30 +334,27 @@ export default function CreateEventForm() {
   return (
     <motion.form
       animate={{opacity: 1, y: 0}}
-      className="panel-border panel-shadow rounded-[28px] bg-white p-6 sm:p-8"
+      className="panel-border panel-shadow rounded-2xl bg-white p-4 sm:p-6"
       id="create-link"
       initial={{opacity: 0, y: 16}}
       onSubmit={handleSubmit}
       transition={{duration: 0.35}}
     >
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-5">
         <div>
-          <h2 className="font-headline text-2xl font-extrabold tracking-tight text-ink">Create your Link!</h2>
+          <h2 className="font-headline text-xl font-extrabold tracking-tight text-ink">Create your Link!</h2>
           <p className="mt-1 text-sm text-ink-soft">Share one page, collect availability, and see the overlap instantly.</p>
-        </div>
-        <div className="rounded-full bg-primary/10 p-3 text-primary">
-          <Sparkles className="h-5 w-5" />
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-ink">Event name</span>
           <div className="relative">
-            <PencilLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+            <PencilLine className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
             <input
               className={cn(
-                'w-full rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150',
+                'w-full rounded-xl border bg-surface-soft py-3 pl-10 pr-4 text-sm text-ink outline-none transition-all duration-150',
                 fieldErrors.title ? 'border-danger' : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
               )}
               onChange={(currentEvent) => setTitle(currentEvent.target.value)}
@@ -374,7 +371,7 @@ export default function CreateEventForm() {
               <CalendarRange className="h-4 w-4 text-primary" />
               Dates
             </span>
-            <div className="grid rounded-xl border border-line bg-surface-soft p-1 sm:grid-cols-2">
+            <div className="grid rounded-lg border border-line bg-surface-soft p-1 sm:grid-cols-2">
               {[
                 {label: 'Date range', value: 'range' as const},
                 {label: 'Select dates', value: 'selected' as const},
@@ -385,7 +382,7 @@ export default function CreateEventForm() {
                   <button
                     aria-pressed={isActive}
                     className={cn(
-                      'rounded-lg px-3 py-2 text-sm font-semibold transition-colors duration-150',
+                      'rounded-md px-3 py-1.5 text-sm font-semibold transition-colors duration-150',
                       isActive ? 'bg-white text-primary shadow-sm' : 'text-ink-soft hover:text-ink',
                     )}
                     key={option.value}
@@ -400,13 +397,13 @@ export default function CreateEventForm() {
           </div>
 
           {dateMode === 'range' ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-ink">Earliest possible date</span>
                 <input
                   type="date"
                   className={cn(
-                    'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                    'date-input w-full rounded-xl border bg-surface-soft px-3.5 py-3 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
                     fieldErrors.dates
                       ? 'border-danger'
                       : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -425,7 +422,7 @@ export default function CreateEventForm() {
                 <input
                   type="date"
                   className={cn(
-                    'date-input w-full rounded-2xl border bg-surface-soft px-4 py-3.5 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
+                    'date-input w-full rounded-xl border bg-surface-soft px-3.5 py-3 text-base text-ink outline-none transition-all duration-150 sm:text-sm',
                     fieldErrors.dates
                       ? 'border-danger'
                       : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -440,11 +437,11 @@ export default function CreateEventForm() {
               </label>
             </div>
           ) : (
-            <div className="rounded-2xl border border-line bg-surface-soft p-3 sm:p-4">
+            <div className="rounded-xl border border-line bg-surface-soft p-3">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <button
                   aria-label="Show previous months"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
                   onClick={() => shiftCalendarMonths('previous')}
                   type="button"
                 >
@@ -455,7 +452,7 @@ export default function CreateEventForm() {
                 </p>
                 <button
                   aria-label="Show next months"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink transition-colors duration-150 hover:border-primary/25 hover:text-primary"
                   onClick={() => shiftCalendarMonths('next')}
                   type="button"
                 >
@@ -463,11 +460,11 @@ export default function CreateEventForm() {
                 </button>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {visibleCalendarMonths.map((month) => (
-                  <div className="rounded-xl bg-white p-3" key={`${month.year}-${month.month}`}>
+                  <div className="rounded-lg bg-white p-2.5" key={`${month.year}-${month.month}`}>
                     <p className="text-center text-sm font-semibold text-ink">{month.label}</p>
-                    <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-ink-soft">
+                    <div className="mt-2 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-ink-soft">
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((weekday, index) => (
                         <div key={`${month.year}-${month.month}-${weekday}-${index}`}>{weekday}</div>
                       ))}
@@ -485,7 +482,7 @@ export default function CreateEventForm() {
                             <button
                               aria-pressed={isSelected}
                               className={cn(
-                                'aspect-square rounded-lg text-sm font-semibold transition-colors duration-150',
+                                'aspect-square rounded-md text-xs font-semibold transition-colors duration-150 sm:text-sm',
                                 isSelected
                                   ? 'bg-primary text-white'
                                   : 'bg-surface-soft text-ink hover:bg-primary/10 hover:text-primary',
@@ -520,14 +517,14 @@ export default function CreateEventForm() {
           {fieldErrors.dates ? <p className="mt-2 text-sm text-danger">{fieldErrors.dates}</p> : null}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-ink">Start time</span>
             <div className="relative">
-              <Clock3 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+              <Clock3 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
               <select
                 className={cn(
-                  'w-full appearance-none rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150',
+                  'w-full appearance-none rounded-xl border bg-surface-soft py-3 pl-10 pr-4 text-sm text-ink outline-none transition-all duration-150',
                   fieldErrors.timeRangeStart
                     ? 'border-danger'
                     : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -548,10 +545,10 @@ export default function CreateEventForm() {
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-ink">End time</span>
             <div className="relative">
-              <Clock3 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+              <Clock3 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
               <select
                 className={cn(
-                  'w-full appearance-none rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-4 text-sm text-ink outline-none transition-all duration-150',
+                  'w-full appearance-none rounded-xl border bg-surface-soft py-3 pl-10 pr-4 text-sm text-ink outline-none transition-all duration-150',
                   fieldErrors.timeRangeEnd
                     ? 'border-danger'
                     : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -575,10 +572,10 @@ export default function CreateEventForm() {
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <div className="relative">
-                <MapPin className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
                 <input
                   className={cn(
-                    'w-full rounded-2xl border bg-surface-soft py-3.5 pl-12 pr-12 text-sm text-ink outline-none transition-all duration-150',
+                    'w-full rounded-xl border bg-surface-soft py-3 pl-10 pr-12 text-sm text-ink outline-none transition-all duration-150',
                     fieldErrors.location
                       ? 'border-danger'
                       : 'border-transparent focus:border-primary/30 focus:ring-2 focus:ring-primary/10',
@@ -602,7 +599,7 @@ export default function CreateEventForm() {
               </div>
 
               <button
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors duration-150 hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isSearchingLocation || !locationQuery.trim()}
                 onClick={() => void handleLocationSearch()}
                 type="button"
@@ -613,7 +610,7 @@ export default function CreateEventForm() {
             </div>
 
             {selectedLocation ? (
-              <div className="rounded-2xl border border-line bg-white px-4 py-3">
+              <div className="rounded-xl border border-line bg-white px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-ink">{selectedLocation.label}</p>
@@ -635,7 +632,7 @@ export default function CreateEventForm() {
                   return (
                     <button
                       className={cn(
-                        'flex w-full items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors duration-150',
+                        'flex w-full items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors duration-150',
                         isSelected
                           ? 'border-primary/30 bg-primary/5'
                           : 'border-line bg-white hover:border-primary/20 hover:bg-surface-soft',
@@ -670,7 +667,7 @@ export default function CreateEventForm() {
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-ink">Description (optional)</span>
           <textarea
-            className="h-24 w-full rounded-2xl border border-transparent bg-surface-soft px-4 py-3 text-sm text-ink outline-none transition-all duration-150 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
+            className="h-20 w-full rounded-xl border border-transparent bg-surface-soft px-4 py-3 text-sm text-ink outline-none transition-all duration-150 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
             onChange={(currentEvent) => setDescription(currentEvent.target.value)}
             placeholder="Add context, agenda notes, or meeting goals."
             value={description}
@@ -680,7 +677,7 @@ export default function CreateEventForm() {
 
       {submitError ? <p className="mt-5 text-sm text-danger">{submitError}</p> : null}
       {submitDebugDetails && (submitDebugDetails.errorCode || submitDebugDetails.requestId || submitDebugDetails.hint || submitDebugDetails.details) ? (
-        <div className="mt-3 rounded-2xl border border-danger/15 bg-danger/5 px-4 py-3 text-xs text-danger">
+        <div className="mt-3 rounded-xl border border-danger/15 bg-danger/5 px-4 py-3 text-xs text-danger">
           {submitDebugDetails.errorCode ? <p><span className="font-semibold">Code:</span> <span className="font-mono">{submitDebugDetails.errorCode}</span></p> : null}
           {submitDebugDetails.requestId ? <p className="mt-1"><span className="font-semibold">Request:</span> <span className="font-mono">{submitDebugDetails.requestId}</span></p> : null}
           {submitDebugDetails.hint ? <p className="mt-1">{submitDebugDetails.hint}</p> : null}
@@ -689,7 +686,7 @@ export default function CreateEventForm() {
       ) : null}
 
       <button
-        className="mt-6 w-full rounded-2xl bg-primary px-5 py-4 text-base font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 w-full rounded-xl bg-primary px-5 py-3.5 text-base font-semibold text-white transition-all duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
         disabled={isSubmitting || isSearchingLocation}
         type="submit"
       >
