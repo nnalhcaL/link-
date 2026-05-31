@@ -22,6 +22,16 @@ export function getMobileDatePageRange(activeIndex: number, visibleDayCount: num
   };
 }
 
+export function getClampedMobileDateIndex(activeIndex: number, totalDayCount: number) {
+  const safeTotalDayCount = Math.max(0, totalDayCount);
+
+  if (safeTotalDayCount === 0) {
+    return 0;
+  }
+
+  return Math.min(Math.max(activeIndex, 0), safeTotalDayCount - 1);
+}
+
 export function getSlotPointerDownBehavior(pointerType: string, hasBusyDetails: boolean) {
   return {
     shouldActivateBusySlotPreview: pointerType === 'touch' && hasBusyDetails,

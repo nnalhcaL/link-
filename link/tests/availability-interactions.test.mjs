@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  getClampedMobileDateIndex,
   getMobileDatePageRange,
   getMobileVisibleDayCount,
   getSlotPointerDownBehavior,
@@ -38,4 +39,11 @@ test('mobile date pages snap to full groups of visible days', () => {
   assert.deepEqual(getMobileDatePageRange(3, 3, 12), {startIndex: 3, endIndex: 6});
   assert.deepEqual(getMobileDatePageRange(11, 3, 12), {startIndex: 9, endIndex: 12});
   assert.deepEqual(getMobileDatePageRange(6, 2, 7), {startIndex: 6, endIndex: 7});
+});
+
+test('mobile active date index clamps only when outside available dates', () => {
+  assert.equal(getClampedMobileDateIndex(6, 12), 6);
+  assert.equal(getClampedMobileDateIndex(11, 7), 6);
+  assert.equal(getClampedMobileDateIndex(-2, 7), 0);
+  assert.equal(getClampedMobileDateIndex(4, 0), 0);
 });

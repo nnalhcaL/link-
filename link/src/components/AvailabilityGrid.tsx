@@ -37,7 +37,12 @@ import {
   setGoogleReconnectHint,
   setStoredSelectedCalendarIds,
 } from '@/lib/google-calendar';
-import {getMobileDatePageRange, getMobileVisibleDayCount, getSlotPointerDownBehavior} from '@/lib/availability-interactions';
+import {
+  getClampedMobileDateIndex,
+  getMobileDatePageRange,
+  getMobileVisibleDayCount,
+  getSlotPointerDownBehavior,
+} from '@/lib/availability-interactions';
 import type {
   EventRecord,
   GoogleCalendarBusyDetail,
@@ -149,6 +154,7 @@ export default function AvailabilityGrid({
   const heatmapTooltipHostRef = useRef<HTMLDivElement>(null);
   const timeRows = useMemo(() => generateTimeRows(event.timeRangeStart, event.timeRangeEnd), [event.timeRangeEnd, event.timeRangeStart]);
   const initialSignature = initialAvailability.join('|');
+  const eventDatesSignature = event.dates.join('|');
   const slotSummaries = useMemo(() => buildSlotSummaries(event), [event]);
   const summaryMap = useMemo(() => new Map(slotSummaries.map((summary) => [summary.slotKey, summary])), [slotSummaries]);
   const totalParticipants = event.responses.length;
@@ -249,7 +255,11 @@ export default function AvailabilityGrid({
 
   useEffect(() => {
     setActiveMobileDateIndex(0);
-  }, [event.id, event.dates]);
+  }, [event.id]);
+
+  useEffect(() => {
+    setActiveMobileDateIndex((current) => getClampedMobileDateIndex(current, event.dates.length));
+  }, [eventDatesSignature, event.dates.length, mobileVisibleDayCount]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
