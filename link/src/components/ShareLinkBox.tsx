@@ -62,7 +62,7 @@ export default function ShareLinkBox({eventId, variant = 'card'}: ShareLinkBoxPr
           type="button"
         >
           {copyState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          <span>{copyState === 'copied' ? 'Copied' : 'Share'}</span>
+          <span>{copyState === 'copied' ? 'Copied' : 'Copy link'}</span>
         </button>
       </div>
     );

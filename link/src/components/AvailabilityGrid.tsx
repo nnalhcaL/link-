@@ -912,34 +912,17 @@ export default function AvailabilityGrid({
                       ? 'Google unavailable'
                       : 'Connect Google Calendar'}
               </button>
-              <button
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSubmitting}
-                onClick={handlePrimaryAction}
-                type="button"
-              >
-                {isManualEntryOpen && isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <PencilLine className="h-4 w-4" />}
-                {isManualEntryOpen
-                  ? isSubmitting
-                    ? 'Saving availability...'
-                    : 'Save availability'
-                  : responseId
-                    ? 'Edit availability'
-                    : 'Manual input'}
-              </button>
+              {!isManualEntryOpen ? (
+                <button
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d]"
+                  onClick={handlePrimaryAction}
+                  type="button"
+                >
+                  <PencilLine className="h-4 w-4" />
+                  {responseId ? 'Edit availability' : 'Manual input'}
+                </button>
+              ) : null}
             </div>
-            {isManualEntryOpen ? (
-              <button
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm font-medium text-ink-soft transition-all duration-150 hover:bg-surface-soft hover:text-ink sm:w-auto"
-                onClick={() => {
-                  setSelectedSlots(new Set());
-                  setHasUnsavedManualChanges(true);
-                }}
-                type="button"
-              >
-                Clear all
-              </button>
-            ) : null}
           </div>
         </div>
 
@@ -1237,6 +1220,44 @@ export default function AvailabilityGrid({
             </div>
           </div>
 
+          <div
+            className="sticky z-50 mt-4 rounded-xl border border-line bg-white p-3 shadow-soft sm:static sm:flex sm:items-center sm:justify-between sm:gap-4 sm:bg-surface-soft sm:p-4 sm:shadow-none"
+            style={{bottom: 'calc(env(safe-area-inset-bottom) + 12px)'}}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">
+                {selectedSlots.size} {selectedSlots.size === 1 ? 'slot' : 'slots'} selected
+              </p>
+              <p className="mt-1 text-sm text-ink-soft">Save when your times are ready.</p>
+            </div>
+            <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:mt-0 sm:flex sm:shrink-0 sm:items-center">
+              <button
+                className="rounded-xl px-3.5 py-2.5 text-sm font-medium text-ink-soft transition-colors duration-150 hover:bg-white hover:text-ink sm:hover:bg-surface-strong"
+                onClick={() => {
+                  setSelectedSlots(new Set());
+                  setHasUnsavedManualChanges(true);
+                }}
+                type="button"
+              >
+                Clear all
+              </button>
+              <button
+                className={cn(
+                  'inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#5c439d] disabled:cursor-not-allowed disabled:opacity-60',
+                  hasUnsavedManualChanges
+                    ? 'motion-safe:animate-pulse motion-reduce:ring-2 motion-reduce:ring-primary/30'
+                    : '',
+                )}
+                disabled={isSubmitting}
+                onClick={handlePrimaryAction}
+                type="button"
+              >
+                {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isSubmitting ? 'Saving availability...' : 'Save availability'}
+              </button>
+            </div>
+          </div>
+
           {hasImportedGoogleBusyHints && activeMobileDate && mobileInspectorDetails.length > 0 ? (
             <div className="mt-4 rounded-xl border border-line bg-surface-soft px-4 py-3 sm:hidden">
               <div>
@@ -1423,12 +1444,6 @@ export default function AvailabilityGrid({
           {statusMessage ? <p className="mt-4 text-sm text-success">{statusMessage}</p> : null}
           {errorMessage ? <p className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
 
-          {isManualEntryOpen ? (
-            <div className="mt-4 rounded-xl bg-tertiary-soft/70 p-4">
-              <p className="text-sm font-semibold text-tertiary">{selectedSlots.size} slots selected</p>
-              <p className="mt-1 text-sm text-tertiary/80">Use Save availability above when your selection is ready.</p>
-            </div>
-          ) : null}
         </div>
       </div>
     </section>
